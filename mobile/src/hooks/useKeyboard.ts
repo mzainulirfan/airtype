@@ -20,6 +20,8 @@ function nextEventId(): string {
 
 const initialModifiers: Modifiers = { shift: false, ctrl: false, alt: false, meta: false }
 
+const MAX_BURST_CHARS = 12
+
 export function useKeyboard({
   sessionId,
   clientId,
@@ -139,7 +141,11 @@ export function useKeyboard({
       // Shift is safe here because the label already encodes the shift.
       if (isPureText(key) && !ctrl && !alt && !meta) {
         bufferRef.current.push(key)
-        scheduleFlush()
+        if (bufferRef.current.length >= MAX_BURST_CHARS) {
+          flushBuffer()
+        } else {
+          scheduleFlush()
+        }
         if (shift) releaseShiftLatch()
         return
       }
