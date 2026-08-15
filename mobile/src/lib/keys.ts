@@ -1,12 +1,14 @@
 import type { Modifiers } from '../types'
 
-export type LayerId = 'letters' | 'symbols' | 'fn'
+export type LayerId = 'letters' | 'symbols' | 'extended' | 'fn'
 
 export interface KeyDefinition {
   code: string
   label: string
   kind: 'char' | 'modifier' | 'special' | 'layer'
   shiftLabel?: string
+  /** Symbol keys always type their exact label (Android symbols layer). */
+  symbol?: boolean
   layerTarget?: LayerId
 }
 
@@ -32,6 +34,13 @@ const charKey = (code: string, label: string, shiftLabel: string): KeyDefinition
   label,
   shiftLabel,
   kind: 'char',
+})
+
+const symbolKey = (code: string, label: string): KeyDefinition => ({
+  code,
+  label,
+  kind: 'char',
+  symbol: true,
 })
 
 const layerKey = (code: string, label: string, target: LayerId): KeyDefinition => ({
@@ -66,6 +75,8 @@ export function applyModifierToggle(current: Modifiers, code: string, active: bo
   return { ...current, ...patch }
 }
 
+/* ---------- Letters layer (Android/Gboard QWERTY) ---------- */
+
 const LETTERS_ROW_1: KeyRow = {
   keys: [
     charKey('KeyQ', 'q', 'Q'),
@@ -78,13 +89,11 @@ const LETTERS_ROW_1: KeyRow = {
     charKey('KeyI', 'i', 'I'),
     charKey('KeyO', 'o', 'O'),
     charKey('KeyP', 'p', 'P'),
-    specialKey('Backspace', '⌫'),
   ],
 }
 
 const LETTERS_ROW_2: KeyRow = {
   keys: [
-    modifierKey('CapsLock', 'caps'),
     charKey('KeyA', 'a', 'A'),
     charKey('KeyS', 's', 'S'),
     charKey('KeyD', 'd', 'D'),
@@ -94,7 +103,6 @@ const LETTERS_ROW_2: KeyRow = {
     charKey('KeyJ', 'j', 'J'),
     charKey('KeyK', 'k', 'K'),
     charKey('KeyL', 'l', 'L'),
-    specialKey('Enter', '⏎'),
   ],
 }
 
@@ -108,23 +116,22 @@ const LETTERS_ROW_3: KeyRow = {
     charKey('KeyB', 'b', 'B'),
     charKey('KeyN', 'n', 'N'),
     charKey('KeyM', 'm', 'M'),
-    charKey('Comma', ',', '<'),
-    charKey('Period', '.', '>'),
-    modifierKey('ShiftRight', 'Shift'),
+    specialKey('Backspace', '⌫'),
   ],
 }
 
 const LETTERS_ROW_4: KeyRow = {
   keys: [
-    layerKey('LayerSymbols', '?123', 'symbols'),
-    modifierKey('ControlLeft', 'Ctrl'),
-    modifierKey('AltLeft', 'Alt'),
-    specialKey('Space', ' '),
-    modifierKey('AltRight', 'Alt'),
-    modifierKey('MetaLeft', 'Win'),
     layerKey('LayerFn', 'Fn', 'fn'),
+    layerKey('LayerSymbols', '?123', 'symbols'),
+    charKey('Comma', ',', '<'),
+    specialKey('Space', ' '),
+    charKey('Period', '.', '>'),
+    specialKey('Enter', '⏎'),
   ],
 }
+
+/* ---------- Symbols layer (Gboard ?123) ---------- */
 
 const SYMBOLS_ROW_1: KeyRow = {
   keys: [
@@ -138,29 +145,78 @@ const SYMBOLS_ROW_1: KeyRow = {
     charKey('Digit8', '8', '*'),
     charKey('Digit9', '9', '('),
     charKey('Digit0', '0', ')'),
-    specialKey('Backspace', '⌫'),
   ],
 }
 
 const SYMBOLS_ROW_2: KeyRow = {
   keys: [
-    charKey('Semicolon', ';', ':'),
-    charKey('Quote', "'", '"'),
-    charKey('BracketLeft', '[', '{'),
-    charKey('BracketRight', ']', '}'),
-    charKey('Backslash', '\\', '|'),
     charKey('Minus', '-', '_'),
-    charKey('Equal', '=', '+'),
     charKey('Slash', '/', '?'),
-    charKey('Backquote', '`', '~'),
-    specialKey('Delete', 'Del'),
+    symbolKey('SymColon', ':'),
+    symbolKey('SymSemicolon', ';'),
+    symbolKey('SymLParen', '('),
+    symbolKey('SymRParen', ')'),
+    symbolKey('SymDollar', '$'),
+    symbolKey('SymAmp', '&'),
+    symbolKey('SymAt', '@'),
+    symbolKey('SymQuote', '"'),
   ],
 }
 
 const SYMBOLS_ROW_3: KeyRow = {
   keys: [
-    charKey('Comma', ',', '<'),
     charKey('Period', '.', '>'),
+    charKey('Comma', ',', '<'),
+    symbolKey('SymQuestion', '?'),
+    symbolKey('SymExclaim', '!'),
+    symbolKey('SymApostrophe', "'"),
+    specialKey('Backspace', '⌫'),
+  ],
+}
+
+const SYMBOLS_ROW_4: KeyRow = {
+  keys: [
+    layerKey('LayerLetters', 'ABC', 'letters'),
+    layerKey('LayerExtended', '#+=', 'extended'),
+    specialKey('Space', ' '),
+    specialKey('Enter', '⏎'),
+  ],
+}
+
+/* ---------- Extended symbols layer (Gboard #+=) ---------- */
+
+const EXTENDED_ROW_1: KeyRow = {
+  keys: [
+    charKey('BracketLeft', '[', '{'),
+    charKey('BracketRight', ']', '}'),
+    symbolKey('SymBraceL', '{'),
+    symbolKey('SymBraceR', '}'),
+    symbolKey('SymHash', '#'),
+    symbolKey('SymPercent', '%'),
+    symbolKey('SymCaret', '^'),
+    symbolKey('SymStar', '*'),
+    symbolKey('SymPlus', '+'),
+    charKey('Equal', '=', '+'),
+  ],
+}
+
+const EXTENDED_ROW_2: KeyRow = {
+  keys: [
+    symbolKey('SymUnderscore', '_'),
+    charKey('Backslash', '\\', '|'),
+    symbolKey('SymPipe', '|'),
+    symbolKey('SymLess', '<'),
+    symbolKey('SymGreater', '>'),
+    symbolKey('SymTilde', '~'),
+    symbolKey('SymEuro', '€'),
+    symbolKey('SymDivide', '÷'),
+    symbolKey('SymMultiply', '×'),
+    specialKey('Backspace', '⌫'),
+  ],
+}
+
+const EXTENDED_ROW_3: KeyRow = {
+  keys: [
     specialKey('Tab', 'Tab'),
     specialKey('ArrowLeft', '←'),
     specialKey('ArrowUp', '↑'),
@@ -169,23 +225,34 @@ const SYMBOLS_ROW_3: KeyRow = {
   ],
 }
 
-const SYMBOLS_ROW_4: KeyRow = {
+const EXTENDED_ROW_4: KeyRow = {
   keys: [
     layerKey('LayerLetters', 'ABC', 'letters'),
-    modifierKey('ControlLeft', 'Ctrl'),
-    modifierKey('AltLeft', 'Alt'),
+    layerKey('LayerSymbols', '?123', 'symbols'),
     specialKey('Space', ' '),
-    modifierKey('AltRight', 'Alt'),
-    modifierKey('ControlRight', 'Ctrl'),
     specialKey('Enter', '⏎'),
   ],
 }
 
+/* ---------- Fn layer (PC keys) ---------- */
+
 const FN_ROW_1: KeyRow = {
-  keys: Array.from({ length: 12 }, (_, i) => specialKey(`F${i + 1}`, `F${i + 1}`)),
+  keys: [
+    modifierKey('ControlLeft', 'Ctrl'),
+    modifierKey('AltLeft', 'Alt'),
+    modifierKey('MetaLeft', 'Win'),
+  ],
 }
 
 const FN_ROW_2: KeyRow = {
+  keys: Array.from({ length: 6 }, (_, i) => specialKey(`F${i + 1}`, `F${i + 1}`)),
+}
+
+const FN_ROW_3: KeyRow = {
+  keys: Array.from({ length: 6 }, (_, i) => specialKey(`F${i + 7}`, `F${i + 7}`)),
+}
+
+const FN_ROW_4: KeyRow = {
   keys: [
     specialKey('Home', 'Home'),
     specialKey('End', 'End'),
@@ -196,7 +263,7 @@ const FN_ROW_2: KeyRow = {
   ],
 }
 
-const FN_ROW_3: KeyRow = {
+const FN_ROW_5: KeyRow = {
   keys: [
     specialKey('ArrowLeft', '←'),
     specialKey('ArrowUp', '↑'),
@@ -205,14 +272,11 @@ const FN_ROW_3: KeyRow = {
   ],
 }
 
-const FN_ROW_4: KeyRow = {
+const FN_ROW_6: KeyRow = {
   keys: [
     layerKey('LayerLetters', 'ABC', 'letters'),
-    modifierKey('ControlLeft', 'Ctrl'),
-    modifierKey('AltLeft', 'Alt'),
+    layerKey('LayerSymbols', '?123', 'symbols'),
     specialKey('Space', ' '),
-    modifierKey('AltRight', 'Alt'),
-    modifierKey('ControlRight', 'Ctrl'),
     specialKey('Enter', '⏎'),
   ],
 }
@@ -229,9 +293,14 @@ export const LAYERS: KeyLayer[] = [
     rows: [SYMBOLS_ROW_1, SYMBOLS_ROW_2, SYMBOLS_ROW_3, SYMBOLS_ROW_4],
   },
   {
+    id: 'extended',
+    label: '#+=',
+    rows: [EXTENDED_ROW_1, EXTENDED_ROW_2, EXTENDED_ROW_3, EXTENDED_ROW_4],
+  },
+  {
     id: 'fn',
     label: 'Fn',
-    rows: [FN_ROW_1, FN_ROW_2, FN_ROW_3, FN_ROW_4],
+    rows: [FN_ROW_1, FN_ROW_2, FN_ROW_3, FN_ROW_4, FN_ROW_5, FN_ROW_6],
   },
 ]
 
@@ -240,7 +309,7 @@ export function getLayer(id: LayerId): KeyLayer {
 }
 
 export function keyLabel(def: KeyDefinition, shift: boolean, caps: boolean): string {
-  if (def.kind !== 'char') return def.label
+  if (def.kind !== 'char' || def.symbol) return def.label
   const base = shift ? def.shiftLabel ?? def.label : def.label
   return caps ? base.toUpperCase() : base
 }

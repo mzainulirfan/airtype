@@ -2,16 +2,19 @@ import { useEffect, useRef } from 'react'
 
 interface TypingPreviewProps {
   text: string
+  cursor: number
   onClear: () => void
 }
 
-export default function TypingPreview({ text, onClear }: TypingPreviewProps) {
+export default function TypingPreview({ text, cursor, onClear }: TypingPreviewProps) {
   const bodyRef = useRef<HTMLDivElement>(null)
+  const caretRef = useRef<HTMLSpanElement>(null)
 
   useEffect(() => {
-    const el = bodyRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [text])
+    if (caretRef.current) {
+      caretRef.current.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    }
+  }, [text, cursor])
 
   return (
     <div className="typing-preview">
@@ -23,7 +26,11 @@ export default function TypingPreview({ text, onClear }: TypingPreviewProps) {
       </div>
       <div className="typing-preview-body" ref={bodyRef}>
         {text ? (
-          <div className="typing-preview-text">{text}</div>
+          <div className="typing-preview-text">
+            {text.slice(0, cursor)}
+            <span className="preview-cursor" ref={caretRef} />
+            {text.slice(cursor)}
+          </div>
         ) : (
           <span className="typing-preview-placeholder">Ketik untuk melihat hasil di sini</span>
         )}

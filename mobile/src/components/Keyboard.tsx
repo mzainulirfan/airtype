@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { KeyDefinition } from '../lib/keys'
 import { getLayer, type LayerId } from '../lib/keys'
 import type { Modifiers } from '../types'
@@ -10,15 +10,15 @@ interface KeyboardProps {
   capsLock: boolean
   autoReturnToLetters: boolean
   haptic: boolean
-  onPress: (code: string, key: string) => void
+  onPress: (code: string, key: string, def?: KeyDefinition) => void
   onRelease: (code: string, key: string) => void
 }
 
-function isModifierActive(code: string, modifiers: Modifiers): boolean {
+function isModifierActive(code: string, modifiers: Modifiers, capsLock: boolean): boolean {
   switch (code) {
     case 'ShiftLeft':
     case 'ShiftRight':
-      return modifiers.shift
+      return modifiers.shift || capsLock
     case 'ControlLeft':
     case 'ControlRight':
       return modifiers.ctrl
@@ -45,25 +45,13 @@ export default function Keyboard({
   const layerDef = getLayer(layer)
   const shift = modifiers.shift || shiftLatch
 
-  const defLookup = useMemo(() => {
-    const map = new Map<string, KeyDefinition>()
-    for (const row of layerDef.rows) {
-      for (const def of row.keys) {
-        map.set(def.code, def)
-      }
-    }
-    return map
-  }, [layerDef])
-
   const handleLayerChange = (target: LayerId) => {
     setLayer(target)
   }
 
-  const handlePress = (code: string, key: string) => {
-    const def = defLookup.get(code)
+  const handlePress = (code: string, key: string, def?: KeyDefinition) => {
     // Only auto-return from the fn layer (function keys are momentary by
-    // nature). The symbols layer stays put like a normal phone keyboard, so
-    // you can type several numbers/symbols before switching back to ABC.
+    // nature). The symbols/#+= layers stay put like a normal phone keyboard.
     const isMomentary =
       def?.kind === 'char' ||
       (def?.kind === 'special' &&
@@ -71,20 +59,20 @@ export default function Keyboard({
     if (autoReturnToLetters && layer === 'fn' && isMomentary) {
       setLayer('letters')
     }
-    onPress(code, key)
+    onPress(code, key, def)
   }
 
   return (
     <div className="keyboard">
-      {layerDef.rows.map((row) => (
-        <div className="key-row" key={`${layer}-${row.keys[0].code}`}>
+      {layerDef.rows.map((row, rowIdx) => (
+        <div className="key-row" key={`${layer}-${rowIdx}`}>
           {row.keys.map((def) => (
             <KeyButton
               key={def.code}
               def={def}
               shift={shift}
               caps={capsLock}
-              activeModifier={isModifierActive(def.code, modifiers)}
+              activeModifier={isModifierActive(def.code, modifiers, capsLock)}
               haptic={haptic}
               onPress={handlePress}
               onRelease={onRelease}

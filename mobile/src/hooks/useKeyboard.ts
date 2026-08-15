@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { BroadcastPayload, KeyEventPayload, Modifiers } from '../types'
+import type { BroadcastPayload, EchoToken, KeyEventPayload, Modifiers } from '../types'
+import type { KeyDefinition } from '../lib/keys'
 import { isModifierCode, isPureText, isSpecialCode, vibrate } from '../lib/keys'
 
 export interface KeyboardOptions {
@@ -11,9 +12,8 @@ export interface KeyboardOptions {
   haptic?: boolean
   strictMode?: boolean
   onLatency?: (ms: number) => void
-  /** Local echo of what would appear on the PC, for the on-screen preview.
-   * '\b' = backspace, '\n' = enter, '\t' = tab, otherwise a printable char. */
-  onEcho?: (token: string) => void
+  /** Local echo of what would appear on the PC, for the on-screen preview. */
+  onEcho?: (token: EchoToken) => void
 }
 
 let eventCounter = 0
@@ -27,21 +27,37 @@ const initialModifiers: Modifiers = { shift: false, ctrl: false, alt: false, met
 
 const MAX_BURST_CHARS = 12
 
+const DOUBLE_TAP_SHIFT_MS = 320
+
 /** Map a non-text special key to its preview token. Only for keys that
- * visibly change the typed text (space/enter/tab/backspace); others are null. */
-function echoToken(code: string, key: string): string | null {
+ * visibly move the typed text (space/enter/tab/backspace/delete/navigation). */
+function echoToken(code: string): EchoToken | null {
   switch (code) {
     case 'Space':
-      return ' '
+      return { type: 'insert', text: ' ' }
     case 'Enter':
     case 'NumpadEnter':
-      return '\n'
+      return { type: 'enter' }
     case 'Tab':
-      return '\t'
+      return { type: 'tab' }
     case 'Backspace':
-      return '\b'
+      return { type: 'backspace' }
+    case 'Delete':
+      return { type: 'delete' }
+    case 'ArrowLeft':
+      return { type: 'left' }
+    case 'ArrowRight':
+      return { type: 'right' }
+    case 'ArrowUp':
+      return { type: 'up' }
+    case 'ArrowDown':
+      return { type: 'down' }
+    case 'Home':
+      return { type: 'home' }
+    case 'End':
+      return { type: 'end' }
     default:
-      return isPureText(key) && !isSpecialCode(code) ? key : null
+      return null
   }
 }
 
@@ -70,6 +86,7 @@ export function useKeyboard({
   const hapticRef = useRef(haptic)
   const strictModeRef = useRef(strictMode)
   const onEchoRef = useRef(onEcho)
+  const lastShiftTapRef = useRef(0)
   sendRef.current = send
   pausedRef.current = paused
   hapticRef.current = haptic
@@ -137,11 +154,41 @@ export function useKeyboard({
         return
       }
       const next = { ...modifiersRef.current }
-      let active: boolean
       if (code === 'ShiftLeft' || code === 'ShiftRight') {
-        next.shift = !next.shift
-        active = next.shift
-      } else if (code === 'ControlLeft' || code === 'ControlRight') {
+        const wasOn = modifiersRef.current.shift
+        if (wasOn) {
+          // Second tap: a quick follow-up toggles caps lock (like Android);
+          // a slow one just releases the shift latch.
+          const now = Date.now()
+          if (now - lastShiftTapRef.current < DOUBLE_TAP_SHIFT_MS) {
+            lastShiftTapRef.current = 0
+            setCapsLock((c) => !c)
+            setModifiers({ ...next, shift: false })
+            sendKeyEvent('key_up', code, key, { ...modifiersRef.current, shift: false })
+            return
+          }
+          lastShiftTapRef.current = 0
+          next.shift = false
+          setModifiers(next)
+          sendKeyEvent('key_up', code, key, next)
+          return
+        }
+        // First tap: latch shift and remember the time for double-tap detection.
+        const now = Date.now()
+        if (now - lastShiftTapRef.current < DOUBLE_TAP_SHIFT_MS) {
+          // Was a very quick re-press: treat as double tap.
+          lastShiftTapRef.current = 0
+          setCapsLock((c) => !c)
+          return
+        }
+        lastShiftTapRef.current = now
+        next.shift = true
+        setModifiers(next)
+        sendKeyEvent('key_down', code, key, next)
+        return
+      }
+      let active: boolean
+      if (code === 'ControlLeft' || code === 'ControlRight') {
         next.ctrl = !next.ctrl
         active = next.ctrl
       } else if (code === 'AltLeft' || code === 'AltRight') {
@@ -160,7 +207,7 @@ export function useKeyboard({
   )
 
   const press = useCallback(
-    (code: string, key: string) => {
+    (code: string, key: string, def?: KeyDefinition) => {
       if (pausedRef.current) return
       if (hapticRef.current) vibrate()
 
@@ -173,8 +220,16 @@ export function useKeyboard({
 
       // Fast-path: pure text, without ctrl/alt/meta, can be bundled as type_text.
       // Shift is safe here because the label already encodes the shift.
-      if (isPureText(key) && !isSpecialCode(code) && !ctrl && !alt && !meta && !strictModeRef.current) {
-        onEchoRef.current?.(key)
+      // Symbol keys always use the fast-path (their label IS the exact char).
+      if (
+        isPureText(key) &&
+        !isSpecialCode(code) &&
+        !ctrl &&
+        !alt &&
+        !meta &&
+        (!strictModeRef.current || def?.symbol)
+      ) {
+        onEchoRef.current?.({ type: 'insert', text: key })
         bufferRef.current.push(key)
         if (bufferRef.current.length >= MAX_BURST_CHARS) {
           flushBuffer()
@@ -191,7 +246,7 @@ export function useKeyboard({
       // In strict mode (and for caps in any mode), encode a capital via a
       // momentary Shift around the char so desktop modifier state stays clean.
       if (isPureText(key) && !isSpecialCode(code) && (shift || capsLockRef.current)) {
-        if (!ctrl && !alt && !meta) onEchoRef.current?.(key)
+        if (!ctrl && !alt && !meta) onEchoRef.current?.({ type: 'insert', text: key })
         const withShift = { ...modifiersRef.current, shift: true }
         const withoutShift = { ...modifiersRef.current, shift: false }
         sendKeyEvent('key_down', code, key, withShift)
@@ -201,7 +256,7 @@ export function useKeyboard({
       }
 
       if (!ctrl && !alt && !meta) {
-        const token = echoToken(code, key)
+        const token = echoToken(code)
         if (token) onEchoRef.current?.(token)
       }
       sendKeyEvent('key_down', code, key)

@@ -242,6 +242,22 @@ body {
   word-break: break-word;
 }
 
+.preview-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin: 0 1px;
+  background: var(--accent);
+  vertical-align: text-bottom;
+  animation: cursor-blink 1s steps(1) infinite;
+}
+
+@keyframes cursor-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
 .typing-preview-placeholder {
   color: var(--text-dim);
   font-style: italic;

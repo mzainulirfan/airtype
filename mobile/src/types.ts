@@ -29,6 +29,20 @@ export interface TypeTextPayload {
 
 export type BroadcastPayload = KeyEventPayload | TypeTextPayload | DesktopStatusPayload | PresencePayload
 
+/** Local echo of what would appear on the PC, for the on-screen preview. */
+export type EchoToken =
+  | { type: 'insert'; text: string }
+  | { type: 'backspace' }
+  | { type: 'delete' }
+  | { type: 'left' }
+  | { type: 'right' }
+  | { type: 'up' }
+  | { type: 'down' }
+  | { type: 'home' }
+  | { type: 'end' }
+  | { type: 'enter' }
+  | { type: 'tab' }
+
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
 
 export interface DesktopStatusPayload {

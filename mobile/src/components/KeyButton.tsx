@@ -13,7 +13,7 @@ interface KeyButtonProps {
   caps: boolean
   activeModifier: boolean
   haptic: boolean
-  onPress: (code: string, key: string) => void
+  onPress: (code: string, key: string, def: KeyDefinition) => void
   onRelease: (code: string, key: string) => void
   onLayerChange?: (target: LayerId) => void
 }
@@ -43,8 +43,8 @@ export default function KeyButton({
     .filter(Boolean)
     .join(' ')
 
-  const onPressRef = useRef(onPress)
-  const onReleaseRef = useRef(onRelease)
+  const onPressRef = useRef<(code: string, key: string, def: KeyDefinition) => void>(onPress)
+  const onReleaseRef = useRef<(code: string, key: string) => void>(onRelease)
   onPressRef.current = onPress
   onReleaseRef.current = onRelease
 
@@ -83,12 +83,16 @@ export default function KeyButton({
     }
     setPressed(true)
     const key = def.kind === 'char' ? labelRef.current : def.label
-    onPressRef.current(def.code, key)
+    onPressRef.current(def.code, key, def)
     // Hold-to-repeat for momentary keys only (never modifiers).
     if (def.kind === 'modifier') return
     repeatDelayRef.current = setTimeout(() => {
       repeatTimerRef.current = setInterval(() => {
-        onPressRef.current(def.code, def.kind === 'char' ? labelRef.current : def.label)
+        onPressRef.current(
+          def.code,
+          def.kind === 'char' ? labelRef.current : def.label,
+          def,
+        )
       }, REPEAT_MS)
     }, HOLD_DELAY_MS)
   }

@@ -11,9 +11,65 @@ import { useRealtime } from './hooks/useRealtime'
 import { useWakeLock } from './hooks/useWakeLock'
 import { createSupabaseClient, getChannelName } from './lib/supabase'
 import { parseSessionFromUrl } from './lib/session'
-import type { BroadcastPayload } from './types'
+import type { BroadcastPayload, EchoToken } from './types'
 
 const CLIENT_ID = `mobile-${Math.random().toString(36).slice(2, 10)}`
+
+interface PreviewState {
+  text: string
+  cursor: number
+}
+
+function applyPreviewToken(prev: PreviewState, token: EchoToken): PreviewState {
+  const { text, cursor } = prev
+  switch (token.type) {
+    case 'insert': {
+      const next = text.slice(0, cursor) + token.text + text.slice(cursor)
+      return { text: next, cursor: cursor + token.text.length }
+    }
+    case 'backspace': {
+      if (cursor <= 0) return prev
+      return { text: text.slice(0, cursor - 1) + text.slice(cursor), cursor: cursor - 1 }
+    }
+    case 'delete': {
+      if (cursor >= text.length) return prev
+      return { text: text.slice(0, cursor) + text.slice(cursor + 1), cursor }
+    }
+    case 'left':
+      return { text, cursor: Math.max(0, cursor - 1) }
+    case 'right':
+      return { text, cursor: Math.min(text.length, cursor + 1) }
+    case 'home':
+      return { text, cursor: 0 }
+    case 'end':
+      return { text, cursor: text.length }
+    case 'enter':
+      return { text: text.slice(0, cursor) + '\n' + text.slice(cursor), cursor: cursor + 1 }
+    case 'tab':
+      return { text: text.slice(0, cursor) + '\t' + text.slice(cursor), cursor: cursor + 1 }
+    case 'up':
+    case 'down': {
+      const lines = text.split('\n')
+      let lineIdx = 0
+      let lineStart = 0
+      for (let i = 0; i < lines.length; i++) {
+        if (lineStart + lines[i].length >= cursor) {
+          lineIdx = i
+          break
+        }
+        lineStart += lines[i].length + 1
+      }
+      const col = Math.max(0, cursor - lineStart)
+      const target = token.type === 'up' ? lineIdx - 1 : lineIdx + 1
+      if (target < 0 || target >= lines.length) return prev
+      let targetStart = 0
+      for (let i = 0; i < target; i++) targetStart += lines[i].length + 1
+      return { text, cursor: targetStart + Math.min(col, lines[target].length) }
+    }
+    default:
+      return prev
+  }
+}
 
 function AppInner() {
   const { settings } = useSettings()
@@ -23,7 +79,7 @@ function AppInner() {
   })
   const [paused, setPaused] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [previewText, setPreviewText] = useState('')
+  const [preview, setPreview] = useState<PreviewState>({ text: '', cursor: 0 })
   const [desktopStatus, setDesktopStatus] = useState<
     'waiting_pairing' | 'connected' | 'paused' | null
   >(null)
@@ -38,6 +94,10 @@ function AppInner() {
 
   const { status, send } = useRealtime(client, sessionId, CLIENT_ID, handleMessage)
 
+  const applyEcho = useCallback((token: EchoToken) => {
+    setPreview((prev) => applyPreviewToken(prev, token))
+  }, [])
+
   const { modifiers, shiftLatch, capsLock, press, release, clearModifiers } = useKeyboard({
     sessionId: sessionId ?? '',
     clientId: CLIENT_ID,
@@ -45,14 +105,12 @@ function AppInner() {
     paused,
     haptic: settings.haptic,
     strictMode: settings.strictMode,
-    onEcho: (token) => {
-      setPreviewText((prev) => (token === '\b' ? prev.slice(0, -1) : prev + token))
-    },
+    onEcho: applyEcho,
   })
 
   // Fresh preview per session.
   useEffect(() => {
-    setPreviewText('')
+    setPreview({ text: '', cursor: 0 })
   }, [sessionId])
 
   const handleTogglePause = useCallback(() => {
@@ -82,7 +140,11 @@ function AppInner() {
         onTogglePause={handleTogglePause}
         onOpenSettings={() => setShowSettings(true)}
       />
-      <TypingPreview text={previewText} onClear={() => setPreviewText('')} />
+      <TypingPreview
+        text={preview.text}
+        cursor={preview.cursor}
+        onClear={() => setPreview({ text: '', cursor: 0 })}
+      />
       <div className="keyboard-wrap">
         <Keyboard
           modifiers={modifiers}
