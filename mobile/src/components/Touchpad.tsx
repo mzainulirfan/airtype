@@ -15,6 +15,10 @@ const TAP_MAX_DIST = 12
 const TAP_MAX_MS = 200
 const HOLD_DRAG_MS = 240
 const SCROLL_THRESHOLD_PX = 18
+const EDGE_X = 26
+const EDGE_Y = 20
+
+type EdgeScroll = 'v' | 'h' | null
 
 interface PointerState {
   x: number
@@ -38,6 +42,7 @@ export default function Touchpad({
   const scrollAccYRef = useRef(0)
   const multiFingerRef = useRef(false)
   const dragActiveRef = useRef(false)
+  const edgeScrollRef = useRef<EdgeScroll>(null)
 
   const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -48,6 +53,16 @@ export default function Touchpad({
       dragActiveRef.current = false
       scrollAccXRef.current = 0
       scrollAccYRef.current = 0
+      const rect = e.currentTarget.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      if (x >= rect.width - EDGE_X) {
+        edgeScrollRef.current = 'v'
+      } else if (y >= rect.height - EDGE_Y) {
+        edgeScrollRef.current = 'h'
+      } else {
+        edgeScrollRef.current = null
+      }
     } else {
       multiFingerRef.current = true
     }
@@ -60,6 +75,23 @@ export default function Touchpad({
     })
   }
 
+  /** Turn accumulated finger travel into scroll notches in both axes. */
+  const emitScroll = (dx: number, dy: number) => {
+    const threshold = Math.max(4, SCROLL_THRESHOLD_PX / sensitivity)
+    scrollAccXRef.current += dx
+    scrollAccYRef.current += dy
+    const nx = Math.trunc(scrollAccXRef.current / threshold)
+    const ny = Math.trunc(scrollAccYRef.current / threshold)
+    if (nx !== 0) {
+      scrollAccXRef.current -= nx * threshold
+      onScroll(nx, 'horizontal')
+    }
+    if (ny !== 0) {
+      scrollAccYRef.current -= ny * threshold
+      onScroll(ny, 'vertical')
+    }
+  }
+
   const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
     const map = pointersRef.current
     const state = map.get(e.pointerId)
@@ -70,35 +102,32 @@ export default function Touchpad({
     state.x = e.clientX
     state.y = e.clientY
 
-    const scrolling = map.size >= 2 || (map.size === 1 && multiFingerRef.current)
-    if (!scrolling) {
-      // Single finger: move the cursor; holding still for a moment starts a drag.
-      if (Date.now() - state.downTime >= HOLD_DRAG_MS && !dragActiveRef.current) {
-        dragActiveRef.current = true
-        onButton('down', 'left')
-      }
-      onMove(
-        clamp(Math.round(dx * sensitivity), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
-        clamp(Math.round(dy * sensitivity), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
-      )
-    } else {
+    if (map.size >= 2 || multiFingerRef.current) {
       // Two fingers (or the last finger of a two-finger gesture): scroll in
-      // both axes. Positive dx scrolls right, positive dy scrolls down.
-      // Higher sensitivity crosses the notch threshold sooner (faster scroll).
-      const threshold = Math.max(4, SCROLL_THRESHOLD_PX / sensitivity)
-      scrollAccXRef.current += dx
-      scrollAccYRef.current += dy
-      const notchesX = Math.trunc(scrollAccXRef.current / threshold)
-      const notchesY = Math.trunc(scrollAccYRef.current / threshold)
-      if (notchesX !== 0) {
-        scrollAccXRef.current -= notchesX * threshold
-        onScroll(notchesX, 'horizontal')
-      }
-      if (notchesY !== 0) {
-        scrollAccYRef.current -= notchesY * threshold
-        onScroll(notchesY, 'vertical')
-      }
+      // both axes.
+      emitScroll(dx, dy)
+      return
     }
+
+    const edge = edgeScrollRef.current
+    if (edge === 'v') {
+      emitScroll(0, dy)
+      return
+    }
+    if (edge === 'h') {
+      emitScroll(dx, 0)
+      return
+    }
+
+    // Center: move the cursor; holding still for a moment starts a drag.
+    if (Date.now() - state.downTime >= HOLD_DRAG_MS && !dragActiveRef.current) {
+      dragActiveRef.current = true
+      onButton('down', 'left')
+    }
+    onMove(
+      clamp(Math.round(dx * sensitivity), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
+      clamp(Math.round(dy * sensitivity), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
+    )
   }
 
   const handlePointerUp = (e: PointerEvent<HTMLDivElement>) => {
@@ -126,6 +155,7 @@ export default function Touchpad({
     scrollAccYRef.current = 0
     multiFingerRef.current = false
     dragActiveRef.current = false
+    edgeScrollRef.current = null
   }
 
   const handlePointerCancel = (e: PointerEvent<HTMLDivElement>) => {
@@ -136,6 +166,7 @@ export default function Touchpad({
       scrollAccYRef.current = 0
       multiFingerRef.current = false
       dragActiveRef.current = false
+      edgeScrollRef.current = null
     }
   }
 
@@ -150,7 +181,13 @@ export default function Touchpad({
       onContextMenu={(e) => e.preventDefault()}
     >
       <span className="touchpad-hint">
-        Geser = gerak kursor · Ketuk = klik · 2 jari = scroll/klik kanan · Tahan &amp; geser = drag
+        Geser = kursor · Ketuk = klik · 2 jari = scroll/klik kanan · Tahan = drag
+      </span>
+      <span className="touchpad-edge v" aria-hidden="true">
+        Scroll
+      </span>
+      <span className="touchpad-edge h" aria-hidden="true">
+        Scroll
       </span>
     </div>
   )

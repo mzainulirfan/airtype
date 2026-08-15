@@ -328,6 +328,39 @@ body {
   pointer-events: none;
 }
 
+.touchpad-edge {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  opacity: 0.65;
+  pointer-events: none;
+  user-select: none;
+}
+
+.touchpad-edge.v {
+  top: 6px;
+  right: 3px;
+  bottom: 20px;
+  width: 20px;
+  writing-mode: vertical-rl;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 6px;
+}
+
+.touchpad-edge.h {
+  left: 6px;
+  right: 26px;
+  bottom: 3px;
+  height: 16px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-radius: 6px;
+}
+
 .key-row {
   display: flex;
   gap: 6px;
