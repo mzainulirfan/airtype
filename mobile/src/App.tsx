@@ -1,9 +1,10 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import ConnectScreen from './components/ConnectScreen'
 import InstallPrompt from './components/InstallPrompt'
 import Keyboard from './components/Keyboard'
 import SettingsPanel from './components/SettingsPanel'
 import StatusBar from './components/StatusBar'
+import TypingPreview from './components/TypingPreview'
 import { SettingsProvider, useSettings } from './context/SettingsContext'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useRealtime } from './hooks/useRealtime'
@@ -22,6 +23,7 @@ function AppInner() {
   })
   const [paused, setPaused] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [previewText, setPreviewText] = useState('')
   const [desktopStatus, setDesktopStatus] = useState<
     'waiting_pairing' | 'connected' | 'paused' | null
   >(null)
@@ -43,7 +45,15 @@ function AppInner() {
     paused,
     haptic: settings.haptic,
     strictMode: settings.strictMode,
+    onEcho: (token) => {
+      setPreviewText((prev) => (token === '\b' ? prev.slice(0, -1) : prev + token))
+    },
   })
+
+  // Fresh preview per session.
+  useEffect(() => {
+    setPreviewText('')
+  }, [sessionId])
 
   const handleTogglePause = useCallback(() => {
     setPaused((p) => {
@@ -72,6 +82,7 @@ function AppInner() {
         onTogglePause={handleTogglePause}
         onOpenSettings={() => setShowSettings(true)}
       />
+      <TypingPreview text={previewText} onClear={() => setPreviewText('')} />
       <div className="keyboard-wrap">
         <Keyboard
           modifiers={modifiers}

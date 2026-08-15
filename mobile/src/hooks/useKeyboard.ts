@@ -11,6 +11,9 @@ export interface KeyboardOptions {
   haptic?: boolean
   strictMode?: boolean
   onLatency?: (ms: number) => void
+  /** Local echo of what would appear on the PC, for the on-screen preview.
+   * '\b' = backspace, '\n' = enter, '\t' = tab, otherwise a printable char. */
+  onEcho?: (token: string) => void
 }
 
 let eventCounter = 0
@@ -24,6 +27,24 @@ const initialModifiers: Modifiers = { shift: false, ctrl: false, alt: false, met
 
 const MAX_BURST_CHARS = 12
 
+/** Map a non-text special key to its preview token. Only for keys that
+ * visibly change the typed text (space/enter/tab/backspace); others are null. */
+function echoToken(code: string, key: string): string | null {
+  switch (code) {
+    case 'Space':
+      return ' '
+    case 'Enter':
+    case 'NumpadEnter':
+      return '\n'
+    case 'Tab':
+      return '\t'
+    case 'Backspace':
+      return '\b'
+    default:
+      return isPureText(key) && !isSpecialCode(code) ? key : null
+  }
+}
+
 export function useKeyboard({
   sessionId,
   clientId,
@@ -33,6 +54,7 @@ export function useKeyboard({
   haptic = true,
   strictMode = false,
   onLatency,
+  onEcho,
 }: KeyboardOptions) {
   const [modifiers, setModifiers] = useState<Modifiers>(initialModifiers)
   const [capsLock, setCapsLock] = useState(false)
@@ -47,10 +69,12 @@ export function useKeyboard({
   const pausedRef = useRef(paused)
   const hapticRef = useRef(haptic)
   const strictModeRef = useRef(strictMode)
+  const onEchoRef = useRef(onEcho)
   sendRef.current = send
   pausedRef.current = paused
   hapticRef.current = haptic
   strictModeRef.current = strictMode
+  onEchoRef.current = onEcho
 
   const flushBuffer = useCallback(() => {
     if (bufferRef.current.length === 0) return
@@ -150,6 +174,7 @@ export function useKeyboard({
       // Fast-path: pure text, without ctrl/alt/meta, can be bundled as type_text.
       // Shift is safe here because the label already encodes the shift.
       if (isPureText(key) && !isSpecialCode(code) && !ctrl && !alt && !meta && !strictModeRef.current) {
+        onEchoRef.current?.(key)
         bufferRef.current.push(key)
         if (bufferRef.current.length >= MAX_BURST_CHARS) {
           flushBuffer()
@@ -166,6 +191,7 @@ export function useKeyboard({
       // In strict mode (and for caps in any mode), encode a capital via a
       // momentary Shift around the char so desktop modifier state stays clean.
       if (isPureText(key) && !isSpecialCode(code) && (shift || capsLockRef.current)) {
+        if (!ctrl && !alt && !meta) onEchoRef.current?.(key)
         const withShift = { ...modifiersRef.current, shift: true }
         const withoutShift = { ...modifiersRef.current, shift: false }
         sendKeyEvent('key_down', code, key, withShift)
@@ -174,6 +200,10 @@ export function useKeyboard({
         return
       }
 
+      if (!ctrl && !alt && !meta) {
+        const token = echoToken(code, key)
+        if (token) onEchoRef.current?.(token)
+      }
       sendKeyEvent('key_down', code, key)
       sendKeyEvent('key_up', code, key)
     },

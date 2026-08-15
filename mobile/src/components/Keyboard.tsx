@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { KeyDefinition } from '../lib/keys'
-import { getLayer, vibrate, type LayerId } from '../lib/keys'
+import { getLayer, type LayerId } from '../lib/keys'
 import type { Modifiers } from '../types'
 import KeyButton from './KeyButton'
 
@@ -76,25 +76,6 @@ export default function Keyboard({
 
   return (
     <div className="keyboard">
-      <div className="layer-bar" role="tablist" aria-label="Layer keyboard">
-        {(['letters', 'symbols', 'fn'] as LayerId[]).map((id) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={layer === id}
-            className={`layer-tab ${layer === id ? 'active' : ''}`}
-            onPointerDown={(e) => {
-              e.preventDefault()
-              if (haptic) vibrate()
-              setLayer(id)
-            }}
-          >
-            {getLayer(id).label}
-          </button>
-        ))}
-      </div>
-
       {layerDef.rows.map((row) => (
         <div className="key-row" key={`${layer}-${row.keys[0].code}`}>
           {row.keys.map((def) => (
