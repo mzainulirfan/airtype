@@ -61,10 +61,14 @@ export default function Keyboard({
 
   const handlePress = (code: string, key: string) => {
     const def = defLookup.get(code)
-    const momentary =
+    // Only auto-return from the fn layer (function keys are momentary by
+    // nature). The symbols layer stays put like a normal phone keyboard, so
+    // you can type several numbers/symbols before switching back to ABC.
+    const isMomentary =
       def?.kind === 'char' ||
-      (def?.kind === 'special' && (def.code === 'Space' || def.code === 'Enter'))
-    if (autoReturnToLetters && layer !== 'letters' && momentary) {
+      (def?.kind === 'special' &&
+        (def.code === 'Space' || def.code === 'Enter' || layer === 'fn'))
+    if (autoReturnToLetters && layer === 'fn' && isMomentary) {
       setLayer('letters')
     }
     onPress(code, key)

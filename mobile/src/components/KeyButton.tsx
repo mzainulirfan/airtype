@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
 import type { KeyDefinition } from '../lib/keys'
 import { keyLabel, vibrate } from '../lib/keys'
@@ -64,6 +64,15 @@ export default function KeyButton({
       repeatTimerRef.current = null
     }
   }
+
+  // If the button unmounts (e.g. the layer switches while the key is held),
+  // the hold-to-repeat timers must be cleared or they keep typing forever.
+  useEffect(() => {
+    return () => {
+      if (repeatDelayRef.current) clearTimeout(repeatDelayRef.current)
+      if (repeatTimerRef.current) clearInterval(repeatTimerRef.current)
+    }
+  }, [])
 
   const handlePointerDown = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
