@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BroadcastPayload, KeyEventPayload, Modifiers } from '../types'
-import { isModifierCode, isPureText } from '../lib/keys'
+import { isModifierCode, isPureText, vibrate } from '../lib/keys'
 
 export interface KeyboardOptions {
   sessionId: string
@@ -126,6 +126,7 @@ export function useKeyboard({
   const press = useCallback(
     (code: string, key: string) => {
       if (pausedRef.current) return
+      vibrate()
 
       if (isModifierCode(code) || code === 'CapsLock') {
         toggleModifier(code, key)

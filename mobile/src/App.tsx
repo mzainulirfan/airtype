@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import ConnectScreen from './components/ConnectScreen'
+import InstallPrompt from './components/InstallPrompt'
 import Keyboard from './components/Keyboard'
 import StatusBar from './components/StatusBar'
 import { useKeyboard } from './hooks/useKeyboard'
@@ -47,7 +48,10 @@ export default function App() {
 
   if (!sessionId) {
     return (
-      <ConnectScreen onConnect={(id) => setSessionId(id)} />
+      <div className="connect-outer">
+        <ConnectScreen onConnect={(id) => setSessionId(id)} />
+        <InstallPrompt />
+      </div>
     )
   }
 

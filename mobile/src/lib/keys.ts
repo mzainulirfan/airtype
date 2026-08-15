@@ -159,3 +159,14 @@ export function isPureText(key: string): boolean {
 export function isModifierCode(code: string): boolean {
   return Boolean(MODIFIER_KEYS[code])
 }
+
+/** Haptic feedback on supported mobile browsers. No-op elsewhere. */
+export function vibrate(pattern: number | number[] = 12): void {
+  try {
+    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+      navigator.vibrate(pattern)
+    }
+  } catch {
+    /* blocked or unsupported */
+  }
+}
