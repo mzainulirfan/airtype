@@ -268,9 +268,10 @@ body {
 
 .quick-actions {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  align-items: stretch;
   overflow-x: auto;
-  padding: 0 8px 6px;
+  padding: 0 10px 8px;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
@@ -281,20 +282,32 @@ body {
 
 .qa-btn {
   flex: 0 0 auto;
-  padding: 6px 11px;
+  min-height: 40px;
+  padding: 8px 15px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 18px;
   background: var(--key-bg);
   color: var(--text);
   font-family: inherit;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   -webkit-tap-highlight-color: transparent;
 }
 
 .qa-btn:active {
   background: var(--key-bg-special);
   transform: scale(0.96);
+}
+
+.qa-sep {
+  flex: 0 0 auto;
+  width: 1px;
+  align-self: stretch;
+  margin: 5px 1px;
+  background: var(--border);
 }
 
 .key-row {
