@@ -2,6 +2,7 @@ mod app;
 mod config;
 mod keymap;
 mod keyboard;
+mod mouse;
 mod realtime;
 mod session;
 mod types;

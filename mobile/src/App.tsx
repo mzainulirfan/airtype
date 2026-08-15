@@ -5,6 +5,7 @@ import Keyboard from './components/Keyboard'
 import QuickActions from './components/QuickActions'
 import SettingsPanel from './components/SettingsPanel'
 import StatusBar from './components/StatusBar'
+import Touchpad from './components/Touchpad'
 import TypingPreview from './components/TypingPreview'
 import { SettingsProvider, useSettings } from './context/SettingsContext'
 import { useKeyboard } from './hooks/useKeyboard'
@@ -88,6 +89,7 @@ function AppInner() {
   })
   const [paused, setPaused] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [mode, setMode] = useState<'keyboard' | 'mouse'>('keyboard')
   const [preview, setPreview] = useState<PreviewState>({ text: '', cursor: 0 })
   const [desktopStatus, setDesktopStatus] = useState<
     'waiting_pairing' | 'connected' | 'paused' | null
@@ -107,16 +109,26 @@ function AppInner() {
     setPreview((prev) => applyPreviewToken(prev, token))
   }, [])
 
-  const { modifiers, shiftLatch, capsLock, press, release, runChord, clearModifiers } =
-    useKeyboard({
-      sessionId: sessionId ?? '',
-      clientId: CLIENT_ID,
-      send,
-      paused,
-      haptic: settings.haptic,
-      strictMode: settings.strictMode,
-      onEcho: applyEcho,
-    })
+  const {
+    modifiers,
+    shiftLatch,
+    capsLock,
+    press,
+    release,
+    runChord,
+    clearModifiers,
+    mouseMove,
+    mouseButton,
+    mouseScroll,
+  } = useKeyboard({
+    sessionId: sessionId ?? '',
+    clientId: CLIENT_ID,
+    send,
+    paused,
+    haptic: settings.haptic,
+    strictMode: settings.strictMode,
+    onEcho: applyEcho,
+  })
 
   // Fresh preview per session.
   useEffect(() => {
@@ -139,6 +151,10 @@ function AppInner() {
 
   const handleDisconnect = useCallback(() => {
     setSessionId(null)
+  }, [])
+
+  const handleToggleMode = useCallback(() => {
+    setMode((m) => (m === 'keyboard' ? 'mouse' : 'keyboard'))
   }, [])
 
   const handleTogglePause = useCallback(() => {
@@ -165,27 +181,35 @@ function AppInner() {
         status={status}
         paused={paused}
         desktopStatus={desktopStatus}
+        mode={mode}
+        onToggleMode={handleToggleMode}
         onTogglePause={handleTogglePause}
         onDisconnect={handleDisconnect}
         onOpenSettings={() => setShowSettings(true)}
       />
-      <TypingPreview
-        text={preview.text}
-        cursor={preview.cursor}
-        onClear={() => setPreview({ text: '', cursor: 0 })}
-      />
-      <QuickActions onChord={runChord} />
-      <div className="keyboard-wrap">
-        <Keyboard
-          modifiers={modifiers}
-          shiftLatch={shiftLatch}
-          capsLock={capsLock}
-          autoReturnToLetters={settings.autoReturnToLetters}
-          haptic={settings.haptic}
-          onPress={press}
-          onRelease={release}
-        />
-      </div>
+      {mode === 'mouse' ? (
+        <Touchpad onMove={mouseMove} onButton={mouseButton} onScroll={mouseScroll} />
+      ) : (
+        <>
+          <TypingPreview
+            text={preview.text}
+            cursor={preview.cursor}
+            onClear={() => setPreview({ text: '', cursor: 0 })}
+          />
+          <QuickActions onChord={runChord} />
+          <div className="keyboard-wrap">
+            <Keyboard
+              modifiers={modifiers}
+              shiftLatch={shiftLatch}
+              capsLock={capsLock}
+              autoReturnToLetters={settings.autoReturnToLetters}
+              haptic={settings.haptic}
+              onPress={press}
+              onRelease={release}
+            />
+          </div>
+        </>
+      )}
       <div className="session-info">Sesi: {getChannelName(sessionId)}</div>
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
     </div>

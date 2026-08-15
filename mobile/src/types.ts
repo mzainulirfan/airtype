@@ -27,7 +27,29 @@ export interface TypeTextPayload {
   timestamp: string
 }
 
-export type BroadcastPayload = KeyEventPayload | TypeTextPayload | DesktopStatusPayload | PresencePayload
+export type MouseAction = 'move' | 'down' | 'up' | 'scroll'
+export type MouseButton = 'left' | 'right' | 'middle'
+
+export interface MouseEventPayload {
+  type: 'mouse'
+  sessionId: string
+  eventId: string
+  clientId: string
+  action: MouseAction
+  button?: MouseButton
+  dx?: number
+  dy?: number
+  delta?: number
+  axis?: 'vertical' | 'horizontal'
+  timestamp: string
+}
+
+export type BroadcastPayload =
+  | KeyEventPayload
+  | TypeTextPayload
+  | MouseEventPayload
+  | DesktopStatusPayload
+  | PresencePayload
 
 /** Local echo of what would appear on the PC, for the on-screen preview. */
 export type EchoToken =

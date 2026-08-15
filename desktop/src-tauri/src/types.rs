@@ -35,6 +35,23 @@ pub struct TypeTextPayload {
     pub timestamp: String,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // fields are populated by serde; read individually by callers
+pub struct MouseEventPayload {
+    pub r#type: String,
+    pub session_id: String,
+    pub event_id: String,
+    pub client_id: String,
+    pub action: String,
+    pub button: Option<String>,
+    pub dx: Option<i32>,
+    pub dy: Option<i32>,
+    pub delta: Option<i32>,
+    pub axis: Option<String>,
+    pub timestamp: String,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HistoryItem {

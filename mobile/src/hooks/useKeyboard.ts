@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { BroadcastPayload, EchoToken, KeyEventPayload, Modifiers } from '../types'
+import type {
+  BroadcastPayload,
+  EchoToken,
+  KeyEventPayload,
+  Modifiers,
+  MouseButton,
+} from '../types'
 import type { KeyDefinition } from '../lib/keys'
 import { isModifierCode, isPureText, isSpecialCode, vibrate } from '../lib/keys'
 import type { Chord } from '../lib/chords'
@@ -29,6 +35,9 @@ const initialModifiers: Modifiers = { shift: false, ctrl: false, alt: false, met
 const MAX_BURST_CHARS = 12
 
 const DOUBLE_TAP_SHIFT_MS = 320
+
+/** How often to flush accumulated mouse-move deltas (ms). */
+const MOUSE_MOVE_FLUSH_MS = 24
 
 /** Map a non-text special key to its preview token. Only for keys that
  * visibly move the typed text (space/enter/tab/backspace/delete/navigation). */
@@ -88,6 +97,9 @@ export function useKeyboard({
   const strictModeRef = useRef(strictMode)
   const onEchoRef = useRef(onEcho)
   const lastShiftTapRef = useRef(0)
+  const mouseAccXRef = useRef(0)
+  const mouseAccYRef = useRef(0)
+  const mouseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   sendRef.current = send
   pausedRef.current = paused
   hapticRef.current = haptic
@@ -117,6 +129,7 @@ export function useKeyboard({
   useEffect(() => {
     return () => {
       if (burstTimerRef.current) clearTimeout(burstTimerRef.current)
+      if (mouseTimerRef.current) clearInterval(mouseTimerRef.current)
     }
   }, [])
 
@@ -311,6 +324,78 @@ export function useKeyboard({
     setCapsLock(false)
   }, [])
 
+  // --- Mouse control (touchpad mode) ---
+
+  const flushMouse = useCallback(() => {
+    const dx = mouseAccXRef.current
+    const dy = mouseAccYRef.current
+    mouseAccXRef.current = 0
+    mouseAccYRef.current = 0
+    if (dx === 0 && dy === 0) {
+      if (mouseTimerRef.current) {
+        clearInterval(mouseTimerRef.current)
+        mouseTimerRef.current = null
+      }
+      return
+    }
+    sendRef.current({
+      type: 'mouse',
+      sessionId,
+      eventId: nextEventId(),
+      clientId,
+      action: 'move',
+      dx,
+      dy,
+      timestamp: new Date().toISOString(),
+    })
+  }, [sessionId, clientId])
+
+  const mouseMove = useCallback(
+    (dx: number, dy: number) => {
+      if (pausedRef.current) return
+      if (dx === 0 && dy === 0) return
+      mouseAccXRef.current += dx
+      mouseAccYRef.current += dy
+      if (!mouseTimerRef.current) {
+        mouseTimerRef.current = setInterval(flushMouse, MOUSE_MOVE_FLUSH_MS)
+      }
+    },
+    [flushMouse],
+  )
+
+  const mouseButton = useCallback(
+    (action: 'down' | 'up', button: MouseButton = 'left') => {
+      if (pausedRef.current) return
+      sendRef.current({
+        type: 'mouse',
+        sessionId,
+        eventId: nextEventId(),
+        clientId,
+        action,
+        button,
+        timestamp: new Date().toISOString(),
+      })
+    },
+    [sessionId, clientId],
+  )
+
+  const mouseScroll = useCallback(
+    (delta: number, axis: 'vertical' | 'horizontal' = 'vertical') => {
+      if (pausedRef.current || delta === 0) return
+      sendRef.current({
+        type: 'mouse',
+        sessionId,
+        eventId: nextEventId(),
+        clientId,
+        action: 'scroll',
+        delta,
+        axis,
+        timestamp: new Date().toISOString(),
+      })
+    },
+    [sessionId, clientId],
+  )
+
   return {
     modifiers,
     shiftLatch: modifiers.shift,
@@ -319,5 +404,8 @@ export function useKeyboard({
     release,
     runChord,
     clearModifiers,
+    mouseMove,
+    mouseButton,
+    mouseScroll,
   }
 }

@@ -8,9 +8,10 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::config::Config;
 use crate::keyboard::KeyboardSimulator;
+use crate::mouse::MouseSimulator;
 use crate::realtime::{spawn_realtime, RealtimeCommand};
 use crate::session::{channel_name, generate_session_id, pairing_url, realtime_topic, realtime_ws_url};
-use crate::types::{HistoryItem, KeyEventPayload, SessionInfo, TypeTextPayload};
+use crate::types::{HistoryItem, KeyEventPayload, MouseEventPayload, SessionInfo, TypeTextPayload};
 
 /// If the mobile goes silent for this long, fall back to waiting_pairing.
 const MOBILE_PRESENCE_TIMEOUT_SECS: u64 = 60;
@@ -26,6 +27,7 @@ pub struct AppInner {
     /// True when `paused` came from auto-pause (idle), not a manual toggle.
     pub auto_paused: AtomicBool,
     pub keyboard: KeyboardSimulator,
+    pub mouse: MouseSimulator,
     pub history: Mutex<VecDeque<HistoryItem>>,
     pub dedup: Mutex<HashSet<String>>,
     pub cmd_tx: Mutex<Option<tokio::sync::mpsc::Sender<RealtimeCommand>>>,
@@ -47,6 +49,7 @@ impl AppState {
                 paused: AtomicBool::new(false),
                 auto_paused: AtomicBool::new(false),
                 keyboard: KeyboardSimulator::new(),
+                mouse: MouseSimulator::new(),
                 history: Mutex::new(VecDeque::with_capacity(100)),
                 dedup: Mutex::new(HashSet::new()),
                 cmd_tx: Mutex::new(None),
@@ -256,6 +259,38 @@ fn set_presence(inner: &Arc<AppInner>, app: &AppHandle, status: &str) {
     broadcast_status(inner, status);
 }
 
+fn mouse_button(name: &str) -> Result<enigo::Button, String> {
+    match name {
+        "left" => Ok(enigo::Button::Left),
+        "right" => Ok(enigo::Button::Right),
+        "middle" => Ok(enigo::Button::Middle),
+        other => Err(format!("unknown mouse button: {other}")),
+    }
+}
+
+fn run_mouse(inner: &Arc<AppInner>, p: &MouseEventPayload) -> Result<(), String> {
+    match p.action.as_str() {
+        "move" => inner.mouse.move_relative(p.dx.unwrap_or(0), p.dy.unwrap_or(0)),
+        "down" => {
+            let btn = mouse_button(p.button.as_deref().unwrap_or("left"))?;
+            inner.mouse.button(btn, enigo::Direction::Press)
+        }
+        "up" => {
+            let btn = mouse_button(p.button.as_deref().unwrap_or("left"))?;
+            inner.mouse.button(btn, enigo::Direction::Release)
+        }
+        "scroll" => {
+            let axis = if p.axis.as_deref() == Some("horizontal") {
+                enigo::Axis::Horizontal
+            } else {
+                enigo::Axis::Vertical
+            };
+            inner.mouse.scroll(p.delta.unwrap_or(0), axis)
+        }
+        other => Err(format!("unknown mouse action: {other}")),
+    }
+}
+
 fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
     // The Realtime channel finished joining: we are subscribed and waiting for a peer.
     if value.get("type").and_then(Value::as_str) == Some("realtime_ready") {
@@ -371,6 +406,10 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
                 inner.keyboard.type_text(&p.text),
             ),
             Err(e) => ("type_text".into(), None, None, Err(e.to_string())),
+        },
+        "mouse" => match serde_json::from_value::<MouseEventPayload>(value) {
+            Ok(p) => ("mouse".to_string(), None, None, run_mouse(inner, &p)),
+            Err(e) => ("mouse".into(), None, None, Err(e.to_string())),
         },
         _ => return,
     };
