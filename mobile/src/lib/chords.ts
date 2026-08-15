@@ -25,6 +25,7 @@ export const QUICK_ACTION_GROUPS: Chord[][] = [
     { label: 'Esc', key: { code: 'Escape', key: 'Escape' }, mods: {} },
     { label: 'Ctrl+S', key: { code: 'KeyS', key: 's' }, mods: { ctrl: true } },
     { label: 'Ctrl+F', key: { code: 'KeyF', key: 'f' }, mods: { ctrl: true } },
+    { label: 'Ctrl+W', key: { code: 'KeyW', key: 'w' }, mods: { ctrl: true } },
   ],
 ]
 
