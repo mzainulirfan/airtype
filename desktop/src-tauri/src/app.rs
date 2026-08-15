@@ -32,6 +32,7 @@ pub struct AppInner {
     pub dedup: Mutex<HashSet<String>>,
     pub cmd_tx: Mutex<Option<tokio::sync::mpsc::Sender<RealtimeCommand>>>,
     pub out_rx: Mutex<Option<tokio::sync::mpsc::Receiver<Value>>>,
+    pub realtime_abort: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
     pub loop_abort: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
     pub pairing_url: Mutex<String>,
     pub last_activity: Mutex<Instant>,
@@ -54,6 +55,7 @@ impl AppState {
                 dedup: Mutex::new(HashSet::new()),
                 cmd_tx: Mutex::new(None),
                 out_rx: Mutex::new(None),
+                realtime_abort: Mutex::new(None),
                 loop_abort: Mutex::new(None),
                 pairing_url: Mutex::new(String::new()),
                 last_activity: Mutex::new(Instant::now()),
@@ -93,13 +95,20 @@ impl AppState {
         *self.inner.cmd_tx.lock().unwrap() = Some(cmd_tx);
         *self.inner.out_rx.lock().unwrap() = Some(out_rx);
 
-        spawn_realtime(
+        // Abort any previous realtime task so we never accumulate zombie
+        // websocket connections (they could exhaust the connection budget and
+        // make the live link drop).
+        if let Some(prev) = self.inner.realtime_abort.lock().unwrap().take() {
+            prev.abort();
+        }
+        let handle = spawn_realtime(
             ws_url,
             realtime_topic(&channel),
             self.inner.config.supabase_anon_key.clone(),
             out_tx,
             cmd_rx,
         );
+        *self.inner.realtime_abort.lock().unwrap() = Some(handle);
 
         self.start_message_loop(app);
         emit_status(app, "subscribing");
@@ -292,9 +301,19 @@ fn run_mouse(inner: &Arc<AppInner>, p: &MouseEventPayload) -> Result<(), String>
 }
 
 fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
-    // The Realtime channel finished joining: we are subscribed and waiting for a peer.
+    // The Realtime channel finished joining: we are subscribed.
+    // Do NOT force waiting_pairing here: a brief network blip makes the
+    // websocket reconnect and this event fire again even though a mobile is
+    // still connected — forcing waiting_pairing would make the phone report a
+    // lost connection. Re-confirm the current presence instead.
     if value.get("type").and_then(Value::as_str) == Some("realtime_ready") {
-        set_presence(inner, app, "waiting_pairing");
+        let last = inner.last_presence.lock().unwrap().clone();
+        if last.is_empty() {
+            set_presence(inner, app, "waiting_pairing");
+        } else {
+            emit_status(app, &last);
+            broadcast_status(inner, &last);
+        }
         return;
     }
 

@@ -12,14 +12,16 @@ pub enum RealtimeCommand {
 
 /// Spawn a background task that keeps a Supabase Realtime connection alive,
 /// forwards incoming broadcasts through `out_tx` and applies commands.
+/// Returns a handle that can be aborted to stop the task (and close the socket).
 pub fn spawn_realtime(
     ws_url: String,
     channel: String,
     access_token: String,
     out_tx: mpsc::Sender<Value>,
-    mut cmd_rx: mpsc::Receiver<RealtimeCommand>,
-) {
+    cmd_rx: mpsc::Receiver<RealtimeCommand>,
+) -> tauri::async_runtime::JoinHandle<()> {
     tauri::async_runtime::spawn(async move {
+        let mut cmd_rx = cmd_rx;
         let mut retry = 1u64;
         loop {
             let clean = run_connection(&ws_url, &channel, &access_token, out_tx.clone(), &mut cmd_rx)
@@ -32,7 +34,7 @@ pub fn spawn_realtime(
             tokio::time::sleep(Duration::from_secs(delay)).await;
             retry += 1;
         }
-    });
+    })
 }
 
 /// Returns true if the connection ended cleanly (no retry needed).
