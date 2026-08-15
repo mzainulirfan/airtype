@@ -245,13 +245,20 @@ export function useKeyboard({
 
       // In strict mode (and for caps in any mode), encode a capital via a
       // momentary Shift around the char so desktop modifier state stays clean.
-      if (isPureText(key) && !isSpecialCode(code) && (shift || capsLockRef.current)) {
+      // Pure-text keys are echoed here too so the local preview updates even
+      // when the fast-path was skipped by strict mode.
+      if (isPureText(key) && !isSpecialCode(code)) {
         if (!ctrl && !alt && !meta) onEchoRef.current?.({ type: 'insert', text: key })
-        const withShift = { ...modifiersRef.current, shift: true }
-        const withoutShift = { ...modifiersRef.current, shift: false }
-        sendKeyEvent('key_down', code, key, withShift)
-        sendKeyEvent('key_up', code, key, withoutShift)
-        if (shift) releaseShiftLatch()
+        if (shift || capsLockRef.current) {
+          const withShift = { ...modifiersRef.current, shift: true }
+          const withoutShift = { ...modifiersRef.current, shift: false }
+          sendKeyEvent('key_down', code, key, withShift)
+          sendKeyEvent('key_up', code, key, withoutShift)
+          if (shift) releaseShiftLatch()
+        } else {
+          sendKeyEvent('key_down', code, key)
+          sendKeyEvent('key_up', code, key)
+        }
         return
       }
 
