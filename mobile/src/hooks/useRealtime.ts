@@ -8,8 +8,7 @@ export interface RealtimeOptions {
   onMessage: (event: BroadcastPayload) => void
 }
 
-const HEARTBEAT_MS = 15000
-const CONNECTED_TIMEOUT_MS = 45000
+const PRESENCE_HEARTBEAT_MS = 15000
 
 let presenceCounter = 0
 
@@ -27,8 +26,7 @@ export function useRealtime(
   const [status, setStatus] = useState<ConnectionStatus>('disconnected')
   const onMessageRef = useRef(onMessage)
   const channelRef = useRef<ReturnType<SupabaseClient['channel']> | null>(null)
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const lastHeartbeatRef = useRef<number>(Date.now())
+  const presenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const activeRef = useRef<string | null>(null)
 
   onMessageRef.current = onMessage
@@ -43,7 +41,7 @@ export function useRealtime(
     activeRef.current = channelName
     setStatus('connecting')
 
-    const presence = (type: 'client_joined' | 'client_left') => ({
+    const presence = (type: 'client_joined' | 'client_left' | 'client_heartbeat') => ({
       type,
       eventId: nextPresenceId(clientId),
       sessionId,
@@ -56,7 +54,6 @@ export function useRealtime(
         config: { broadcast: { self: false } },
       })
       .on('broadcast', { event: 'airtype' }, ({ payload }) => {
-        lastHeartbeatRef.current = Date.now()
         onMessageRef.current(payload as BroadcastPayload)
       })
       .subscribe((state) => {
@@ -66,6 +63,13 @@ export function useRealtime(
           channelRef.current
             ?.send({ type: 'broadcast', event: 'airtype', payload: presence('client_joined') })
             .catch(() => {})
+          if (presenceTimerRef.current) clearInterval(presenceTimerRef.current)
+          presenceTimerRef.current = setInterval(() => {
+            if (activeRef.current !== channelName) return
+            channelRef.current
+              ?.send({ type: 'broadcast', event: 'airtype', payload: presence('client_heartbeat') })
+              .catch(() => {})
+          }, PRESENCE_HEARTBEAT_MS)
         } else {
           setStatus('reconnecting')
         }
@@ -73,17 +77,9 @@ export function useRealtime(
 
     channelRef.current = channel
 
-    heartbeatRef.current = setInterval(() => {
-      if (activeRef.current !== channelName) return
-      const elapsed = Date.now() - lastHeartbeatRef.current
-      if (elapsed > CONNECTED_TIMEOUT_MS) {
-        setStatus('reconnecting')
-      }
-    }, HEARTBEAT_MS)
-
     return () => {
       activeRef.current = null
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current)
+      if (presenceTimerRef.current) clearInterval(presenceTimerRef.current)
       channelRef.current
         ?.send({ type: 'broadcast', event: 'airtype', payload: presence('client_left') })
         .catch(() => {})

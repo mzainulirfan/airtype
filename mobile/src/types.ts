@@ -40,7 +40,7 @@ export interface DesktopStatusPayload {
 }
 
 export interface PresencePayload {
-  type: 'client_joined' | 'client_left'
+  type: 'client_joined' | 'client_left' | 'client_heartbeat'
   eventId: string
   sessionId: string
   clientId: string

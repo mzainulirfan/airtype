@@ -12,6 +12,9 @@ use crate::realtime::{spawn_realtime, RealtimeCommand};
 use crate::session::{channel_name, generate_session_id, pairing_url, realtime_topic, realtime_ws_url};
 use crate::types::{HistoryItem, KeyEventPayload, SessionInfo, TypeTextPayload};
 
+/// If the mobile goes silent for this long, fall back to waiting_pairing.
+const MOBILE_PRESENCE_TIMEOUT_SECS: u64 = 60;
+
 pub struct AppState {
     pub inner: Arc<AppInner>,
 }
@@ -28,6 +31,8 @@ pub struct AppInner {
     pub loop_abort: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
     pub pairing_url: Mutex<String>,
     pub last_activity: Mutex<Instant>,
+    pub last_mobile_at: Mutex<Instant>,
+    pub last_presence: Mutex<String>,
     pub init_started: AtomicBool,
 }
 
@@ -46,6 +51,8 @@ impl AppState {
                 loop_abort: Mutex::new(None),
                 pairing_url: Mutex::new(String::new()),
                 last_activity: Mutex::new(Instant::now()),
+                last_mobile_at: Mutex::new(Instant::now()),
+                last_presence: Mutex::new(String::new()),
                 init_started: AtomicBool::new(false),
             }),
         }
@@ -132,6 +139,16 @@ pub fn init_app(app: AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
+
+            // Presence watchdog: if the mobile has been silent for too long,
+            // fall back to waiting_pairing (handles mobile dying without client_left).
+            if !inner.paused.load(Ordering::SeqCst) {
+                let mobile_idle = inner.last_mobile_at.lock().unwrap().elapsed().as_secs();
+                if mobile_idle > MOBILE_PRESENCE_TIMEOUT_SECS {
+                    set_presence(&inner, &app2, "waiting_pairing");
+                }
+            }
+
             let timeout = inner.config.auto_pause_after_ms;
             if timeout == 0 {
                 continue;
@@ -169,11 +186,14 @@ pub fn toggle_pause(app: AppHandle) -> bool {
         state.inner.paused.store(false, Ordering::SeqCst);
         state.inner.keyboard.release_all();
         *state.inner.last_activity.lock().unwrap() = Instant::now();
+        *state.inner.last_mobile_at.lock().unwrap() = Instant::now();
+        *state.inner.last_presence.lock().unwrap() = "connected".to_string();
         emit_status(&app, "connected");
         broadcast_status(&state.inner, "connected");
         return false;
     }
     state.inner.keyboard.release_all();
+    *state.inner.last_presence.lock().unwrap() = "paused".to_string();
     emit_status(&app, "paused");
     broadcast_status(&state.inner, "paused");
     true
@@ -215,11 +235,22 @@ fn broadcast_status(inner: &Arc<AppInner>, status: &str) {
     let _ = tx.try_send(RealtimeCommand::Send(payload));
 }
 
+/// Update pairing status locally + broadcast it, but only when it changed.
+fn set_presence(inner: &Arc<AppInner>, app: &AppHandle, status: &str) {
+    let mut last = inner.last_presence.lock().unwrap();
+    if *last == status {
+        return;
+    }
+    *last = status.to_string();
+    drop(last);
+    emit_status(app, status);
+    broadcast_status(inner, status);
+}
+
 fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
     // The Realtime channel finished joining: we are subscribed and waiting for a peer.
     if value.get("type").and_then(Value::as_str) == Some("realtime_ready") {
-        emit_status(app, "waiting_pairing");
-        broadcast_status(inner, "waiting_pairing");
+        set_presence(inner, app, "waiting_pairing");
         return;
     }
 
@@ -250,14 +281,15 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
 
     // Presence events update pairing status and are not affected by pause.
     match event_type {
-        "client_joined" => {
-            emit_status(app, "connected");
-            broadcast_status(inner, "connected");
+        "client_joined" | "client_heartbeat" => {
+            *inner.last_mobile_at.lock().unwrap() = Instant::now();
+            if !inner.paused.load(Ordering::SeqCst) {
+                set_presence(inner, app, "connected");
+            }
             return;
         }
         "client_left" => {
-            emit_status(app, "waiting_pairing");
-            broadcast_status(inner, "waiting_pairing");
+            set_presence(inner, app, "waiting_pairing");
             return;
         }
         "desktop_status" => return,
