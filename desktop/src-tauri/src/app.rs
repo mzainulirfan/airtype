@@ -54,7 +54,8 @@ impl AppState {
     fn restart_realtime(&self, app: &AppHandle) -> Result<(), String> {
         let session_id = self.inner.session_id.lock().unwrap().clone();
         let channel = channel_name(&session_id);
-        *self.inner.pairing_url.lock().unwrap() = pairing_url(&session_id);
+        *self.inner.pairing_url.lock().unwrap() =
+            pairing_url(&self.inner.config.pairing_base_url, &session_id);
 
         if !self.inner.config.is_configured() {
             return Err(

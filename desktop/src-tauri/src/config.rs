@@ -1,6 +1,7 @@
 pub struct Config {
     pub supabase_url: String,
     pub supabase_anon_key: String,
+    pub pairing_base_url: String,
     pub key_event_mode: String,
     pub auto_pause_after_ms: u64,
     pub ack_enabled: bool,
@@ -14,6 +15,7 @@ impl Config {
             supabase_url: env_var_fallback("AIRTYPE_SUPABASE_URL", "SUPABASE_URL"),
             supabase_anon_key: env_var_fallback("AIRTYPE_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY"),
             key_event_mode: env_or("AIRTYPE_KEY_EVENT_MODE", "auto"),
+            pairing_base_url: env_or("AIRTYPE_PAIRING_BASE_URL", "https://airtype.app"),
             auto_pause_after_ms: env_u64("AIRTYPE_AUTO_PAUSE_AFTER_MS", 60_000),
             ack_enabled: env_bool("AIRTYPE_ACK_ENABLED", false),
             history_enabled: env_bool("AIRTYPE_HISTORY_ENABLED", true),

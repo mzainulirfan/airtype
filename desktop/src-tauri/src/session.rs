@@ -16,6 +16,7 @@ pub fn realtime_ws_url(supabase_url: &str, anon_key: &str) -> String {
     format!("{wss}?apikey={anon_key}&vsn=1.0.0")
 }
 
-pub fn pairing_url(session_id: &str) -> String {
-    format!("https://airtype.app/connect?session={session_id}")
+pub fn pairing_url(base_url: &str, session_id: &str) -> String {
+    let base = base_url.trim_end_matches('/');
+    format!("{base}/connect?session={session_id}")
 }
