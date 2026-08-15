@@ -175,7 +175,7 @@ body {
 
 /* ---------- Keyboard ---------- */
 .keyboard-wrap {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
@@ -302,8 +302,8 @@ body {
 }
 
 .touchpad {
-  flex: 0 0 auto;
-  height: clamp(100px, 15vh, 140px);
+  flex: 1 1 auto;
+  min-height: 90px;
   margin: 0 10px 8px;
   position: relative;
   border: 1px solid var(--border);
