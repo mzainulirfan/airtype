@@ -302,17 +302,9 @@ body {
 }
 
 .touchpad {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 0 10px 8px;
-}
-
-.touchpad-surface {
-  flex: 1;
-  min-height: 200px;
+  flex: 0 0 auto;
+  height: clamp(100px, 15vh, 140px);
+  margin: 0 10px 8px;
   position: relative;
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -330,33 +322,10 @@ body {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 0 24px;
-  font-size: 13px;
+  padding: 0 20px;
+  font-size: 12px;
   color: var(--text-dim);
   pointer-events: none;
-}
-
-.touchpad-buttons {
-  display: flex;
-  gap: 10px;
-}
-
-.tpad-btn {
-  flex: 1;
-  min-height: 44px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--key-bg);
-  color: var(--text);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  touch-action: none;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.tpad-btn:active {
-  background: var(--key-bg-special);
 }
 
 .key-row {

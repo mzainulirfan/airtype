@@ -89,7 +89,6 @@ function AppInner() {
   })
   const [paused, setPaused] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
-  const [mode, setMode] = useState<'keyboard' | 'mouse'>('keyboard')
   const [preview, setPreview] = useState<PreviewState>({ text: '', cursor: 0 })
   const [desktopStatus, setDesktopStatus] = useState<
     'waiting_pairing' | 'connected' | 'paused' | null
@@ -153,10 +152,6 @@ function AppInner() {
     setSessionId(null)
   }, [])
 
-  const handleToggleMode = useCallback(() => {
-    setMode((m) => (m === 'keyboard' ? 'mouse' : 'keyboard'))
-  }, [])
-
   const handleTogglePause = useCallback(() => {
     setPaused((p) => {
       if (p) clearModifiers()
@@ -181,35 +176,28 @@ function AppInner() {
         status={status}
         paused={paused}
         desktopStatus={desktopStatus}
-        mode={mode}
-        onToggleMode={handleToggleMode}
         onTogglePause={handleTogglePause}
         onDisconnect={handleDisconnect}
         onOpenSettings={() => setShowSettings(true)}
       />
-      {mode === 'mouse' ? (
-        <Touchpad onMove={mouseMove} onButton={mouseButton} onScroll={mouseScroll} />
-      ) : (
-        <>
-          <TypingPreview
-            text={preview.text}
-            cursor={preview.cursor}
-            onClear={() => setPreview({ text: '', cursor: 0 })}
-          />
-          <QuickActions onChord={runChord} />
-          <div className="keyboard-wrap">
-            <Keyboard
-              modifiers={modifiers}
-              shiftLatch={shiftLatch}
-              capsLock={capsLock}
-              autoReturnToLetters={settings.autoReturnToLetters}
-              haptic={settings.haptic}
-              onPress={press}
-              onRelease={release}
-            />
-          </div>
-        </>
-      )}
+      <TypingPreview
+        text={preview.text}
+        cursor={preview.cursor}
+        onClear={() => setPreview({ text: '', cursor: 0 })}
+      />
+      <QuickActions onChord={runChord} />
+      <Touchpad onMove={mouseMove} onButton={mouseButton} onScroll={mouseScroll} />
+      <div className="keyboard-wrap">
+        <Keyboard
+          modifiers={modifiers}
+          shiftLatch={shiftLatch}
+          capsLock={capsLock}
+          autoReturnToLetters={settings.autoReturnToLetters}
+          haptic={settings.haptic}
+          onPress={press}
+          onRelease={release}
+        />
+      </div>
       <div className="session-info">Sesi: {getChannelName(sessionId)}</div>
       {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
     </div>

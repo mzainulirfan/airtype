@@ -10,8 +10,9 @@ interface TouchpadProps {
 
 const MOVE_SENSITIVITY = 1.5
 const MOVE_MAX_DELTA = 60
-const TAP_MAX_DIST = 10
+const TAP_MAX_DIST = 12
 const TAP_MAX_MS = 200
+const HOLD_DRAG_MS = 240
 const SCROLL_THRESHOLD_PX = 18
 
 interface PointerState {
@@ -28,11 +29,23 @@ export default function Touchpad({ onMove, onButton, onScroll }: TouchpadProps) 
   const surfaceRef = useRef<HTMLDivElement>(null)
   const pointersRef = useRef<Map<number, PointerState>>(new Map())
   const scrollAccRef = useRef(0)
+  const gestureStartRef = useRef(0)
+  const multiFingerRef = useRef(false)
+  const dragActiveRef = useRef(false)
 
   const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault()
     surfaceRef.current?.setPointerCapture(e.pointerId)
-    pointersRef.current.set(e.pointerId, {
+    const map = pointersRef.current
+    if (map.size === 0) {
+      gestureStartRef.current = Date.now()
+      multiFingerRef.current = false
+      dragActiveRef.current = false
+      scrollAccRef.current = 0
+    } else {
+      multiFingerRef.current = true
+    }
+    map.set(e.pointerId, {
       x: e.clientX,
       y: e.clientY,
       downX: e.clientX,
@@ -51,14 +64,20 @@ export default function Touchpad({ onMove, onButton, onScroll }: TouchpadProps) 
     state.x = e.clientX
     state.y = e.clientY
 
-    if (map.size === 1) {
+    const scrolling = map.size >= 2 || (map.size === 1 && multiFingerRef.current)
+    if (!scrolling) {
+      // Single finger: move the cursor; holding still for a moment starts a drag.
+      if (Date.now() - state.downTime >= HOLD_DRAG_MS && !dragActiveRef.current) {
+        dragActiveRef.current = true
+        onButton('down', 'left')
+      }
       onMove(
         clamp(Math.round(dx * MOVE_SENSITIVITY), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
         clamp(Math.round(dy * MOVE_SENSITIVITY), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
       )
-    } else if (map.size === 2) {
-      // Two fingers: accumulate vertical travel, emit a scroll notch per
-      // threshold crossed. Positive dy (swipe down) scrolls the page down.
+    } else {
+      // Two fingers (or the last finger of a two-finger gesture): scroll.
+      // Positive dy (swipe down) scrolls the page down.
       scrollAccRef.current += dy
       const notches = Math.trunc(scrollAccRef.current / SCROLL_THRESHOLD_PX)
       if (notches !== 0) {
@@ -73,69 +92,51 @@ export default function Touchpad({ onMove, onButton, onScroll }: TouchpadProps) 
     const state = map.get(e.pointerId)
     if (!state) return
     map.delete(e.pointerId)
-    if (map.size === 0) {
-      scrollAccRef.current = 0
-      const dist = Math.hypot(e.clientX - state.downX, e.clientY - state.downY)
-      const dur = Date.now() - state.downTime
-      if (dist < TAP_MAX_DIST && dur < TAP_MAX_MS) {
+    if (map.size > 0) return
+
+    const dist = Math.hypot(e.clientX - state.downX, e.clientY - state.downY)
+    const dur = Date.now() - state.downTime
+
+    if (dragActiveRef.current) {
+      onButton('up', 'left')
+    } else if (dur < TAP_MAX_MS && dist < TAP_MAX_DIST) {
+      if (multiFingerRef.current) {
+        onButton('down', 'right')
+        onButton('up', 'right')
+      } else {
         onButton('down', 'left')
         onButton('up', 'left')
       }
     }
+    scrollAccRef.current = 0
+    multiFingerRef.current = false
+    dragActiveRef.current = false
+    void gestureStartRef
   }
 
   const handlePointerCancel = (e: PointerEvent<HTMLDivElement>) => {
     const map = pointersRef.current
     if (map.delete(e.pointerId) && map.size === 0) {
+      if (dragActiveRef.current) onButton('up', 'left')
       scrollAccRef.current = 0
+      multiFingerRef.current = false
+      dragActiveRef.current = false
     }
   }
 
-  const holdButton = (e: PointerEvent<HTMLButtonElement>, button: MouseButton) => {
-    e.preventDefault()
-    e.currentTarget.setPointerCapture(e.pointerId)
-    onButton('down', button)
-  }
-
-  const releaseButton = (button: MouseButton) => () => onButton('up', button)
-
   return (
-    <div className="touchpad">
-      <div
-        ref={surfaceRef}
-        className="touchpad-surface"
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerCancel}
-        onContextMenu={(e) => e.preventDefault()}
-      >
-        <span className="touchpad-hint">
-          Geser untuk gerakkan kursor · Ketuk = klik kiri · 2 jari = scroll
-        </span>
-      </div>
-      <div className="touchpad-buttons">
-        <button
-          type="button"
-          className="tpad-btn tpad-left"
-          onPointerDown={(e) => holdButton(e, 'left')}
-          onPointerUp={releaseButton('left')}
-          onPointerCancel={releaseButton('left')}
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          Klik kiri
-        </button>
-        <button
-          type="button"
-          className="tpad-btn tpad-right"
-          onPointerDown={(e) => holdButton(e, 'right')}
-          onPointerUp={releaseButton('right')}
-          onPointerCancel={releaseButton('right')}
-          onContextMenu={(e) => e.preventDefault()}
-        >
-          Klik kanan
-        </button>
-      </div>
+    <div
+      ref={surfaceRef}
+      className="touchpad"
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onContextMenu={(e) => e.preventDefault()}
+    >
+      <span className="touchpad-hint">
+        Geser = gerak kursor · Ketuk = klik · 2 jari = scroll/klik kanan · Tahan &amp; geser = drag
+      </span>
     </div>
   )
 }
