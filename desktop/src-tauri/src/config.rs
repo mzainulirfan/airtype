@@ -21,7 +21,7 @@ impl Config {
                 &["AIRTYPE_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY"],
                 BAKED_SUPABASE_ANON_KEY,
             ),
-            pairing_base_url: env_or("AIRTYPE_PAIRING_BASE_URL", "https://airtype.app"),
+            pairing_base_url: env_or("AIRTYPE_PAIRING_BASE_URL", BAKED_PAIRING_BASE_URL),
             auto_pause_after_ms: env_u64("AIRTYPE_AUTO_PAUSE_AFTER_MS", 60_000),
             history_enabled: env_bool("AIRTYPE_HISTORY_ENABLED", true),
             history_limit: env_usize("AIRTYPE_HISTORY_LIMIT", 100),
