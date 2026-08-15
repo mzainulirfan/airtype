@@ -10,10 +10,11 @@ interface TouchpadProps {
   sensitivity?: number
 }
 
-const MOVE_MAX_DELTA = 60
+const MOVE_MAX_DELTA = 100
 const TAP_MAX_DIST = 12
 const TAP_MAX_MS = 200
 const HOLD_DRAG_MS = 240
+const HOLD_STILL_RADIUS = 10
 const SCROLL_THRESHOLD_PX = 18
 const EDGE_X = 60
 const EDGE_Y = 48
@@ -119,14 +120,26 @@ export default function Touchpad({
       return
     }
 
-    // Center: move the cursor; holding still for a moment starts a drag.
-    if (Date.now() - state.downTime >= HOLD_DRAG_MS && !dragActiveRef.current) {
+    // Center: move the cursor. A drag only starts when the finger was held
+    // still for a moment — never while actually moving, otherwise ordinary
+    // cursor moves over text would start a drag and select everything.
+    const distFromDown = Math.hypot(e.clientX - state.downX, e.clientY - state.downY)
+    if (
+      Date.now() - state.downTime >= HOLD_DRAG_MS &&
+      !dragActiveRef.current &&
+      distFromDown < HOLD_STILL_RADIUS
+    ) {
       dragActiveRef.current = true
       onButton('down', 'left')
     }
+    // Mild acceleration: faster finger travel moves the cursor further, so
+    // long flicks cover distance without a sluggish feel.
+    const speed = Math.hypot(dx, dy)
+    const accel = speed > 8 ? 1 + Math.min(1, (speed - 8) / 40) : 1
+    const gain = sensitivity * accel
     onMove(
-      clamp(Math.round(dx * sensitivity), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
-      clamp(Math.round(dy * sensitivity), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
+      clamp(Math.round(dx * gain), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
+      clamp(Math.round(dy * gain), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
     )
   }
 

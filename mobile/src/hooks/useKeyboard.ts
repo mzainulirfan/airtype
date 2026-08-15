@@ -42,7 +42,7 @@ const CHORD_HOLD_MS = 250
 const CHORD_RELEASE_MS = 150
 
 /** How often to flush accumulated mouse-move deltas (ms). */
-const MOUSE_MOVE_FLUSH_MS = 24
+const MOUSE_MOVE_FLUSH_MS = 16
 
 /** Map a non-text special key to its preview token. Only for keys that
  * visibly move the typed text (space/enter/tab/backspace/delete/navigation). */
@@ -388,6 +388,9 @@ export function useKeyboard({
       mouseAccXRef.current += dx
       mouseAccYRef.current += dy
       if (!mouseTimerRef.current) {
+        // Send the first movement immediately instead of waiting for the
+        // flush interval, so the cursor starts following the finger at once.
+        flushMouse()
         mouseTimerRef.current = setInterval(flushMouse, MOUSE_MOVE_FLUSH_MS)
       }
     },

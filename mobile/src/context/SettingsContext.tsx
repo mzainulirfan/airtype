@@ -29,7 +29,7 @@ const DEFAULTS: Settings = {
   theme: 'system',
   autoReturnToLetters: true,
   strictMode: false,
-  cursorSensitivity: 1.5,
+  cursorSensitivity: 2,
 }
 
 interface SettingsContextValue {
