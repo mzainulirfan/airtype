@@ -344,9 +344,9 @@ body {
 
 .touchpad-edge.v {
   top: 6px;
-  right: 3px;
-  bottom: 20px;
-  width: 20px;
+  right: 0;
+  bottom: 36px;
+  width: 44px;
   writing-mode: vertical-rl;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-radius: 6px;
@@ -354,9 +354,9 @@ body {
 
 .touchpad-edge.h {
   left: 6px;
-  right: 26px;
-  bottom: 3px;
-  height: 16px;
+  right: 44px;
+  bottom: 0;
+  height: 36px;
   background: color-mix(in srgb, var(--accent) 12%, transparent);
   border-radius: 6px;
 }

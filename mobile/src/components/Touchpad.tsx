@@ -15,8 +15,8 @@ const TAP_MAX_DIST = 12
 const TAP_MAX_MS = 200
 const HOLD_DRAG_MS = 240
 const SCROLL_THRESHOLD_PX = 18
-const EDGE_X = 26
-const EDGE_Y = 20
+const EDGE_X = 44
+const EDGE_Y = 36
 
 type EdgeScroll = 'v' | 'h' | null
 
