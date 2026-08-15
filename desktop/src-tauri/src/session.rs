@@ -1,7 +1,7 @@
 use uuid::Uuid;
 
 pub fn generate_session_id() -> String {
-    Uuid::new_v4().simple().to_string()
+    Uuid::new_v4().simple().to_string()[..4].to_string()
 }
 
 pub fn channel_name(session_id: &str) -> String {

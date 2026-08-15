@@ -2,22 +2,19 @@ pub struct Config {
     pub supabase_url: String,
     pub supabase_anon_key: String,
     pub pairing_base_url: String,
-    pub key_event_mode: String,
     pub auto_pause_after_ms: u64,
-    pub ack_enabled: bool,
     pub history_enabled: bool,
     pub history_limit: usize,
 }
 
 impl Config {
     pub fn load() -> Self {
+        load_dotenv();
         Config {
             supabase_url: env_var_fallback("AIRTYPE_SUPABASE_URL", "SUPABASE_URL"),
             supabase_anon_key: env_var_fallback("AIRTYPE_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY"),
-            key_event_mode: env_or("AIRTYPE_KEY_EVENT_MODE", "auto"),
             pairing_base_url: env_or("AIRTYPE_PAIRING_BASE_URL", "https://airtype.app"),
             auto_pause_after_ms: env_u64("AIRTYPE_AUTO_PAUSE_AFTER_MS", 60_000),
-            ack_enabled: env_bool("AIRTYPE_ACK_ENABLED", false),
             history_enabled: env_bool("AIRTYPE_HISTORY_ENABLED", true),
             history_limit: env_usize("AIRTYPE_HISTORY_LIMIT", 100),
         }
@@ -30,6 +27,40 @@ impl Config {
 
 fn env_or(key: &str, default: &str) -> String {
     std::env::var(key).unwrap_or_else(|_| default.to_string())
+}
+
+/// Load `KEY=VALUE` lines from a local `.env` file into the process
+/// environment, without overriding variables that are already set.
+fn load_dotenv() {
+    let mut candidate = std::env::current_dir().unwrap_or_default();
+    candidate.push(".env");
+    if !candidate.is_file() {
+        candidate.pop();
+        candidate.push("..");
+        candidate.push(".env");
+        if !candidate.is_file() {
+            return;
+        }
+    }
+
+    let Ok(content) = std::fs::read_to_string(&candidate) else {
+        return;
+    };
+    for line in content.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let mut parts = line.splitn(2, '=');
+        let (Some(key), Some(value)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let key = key.trim();
+        let value = value.trim().trim_matches('"').trim_matches('\'');
+        if !key.is_empty() && std::env::var(key).is_err() {
+            std::env::set_var(key, value);
+        }
+    }
 }
 
 fn env_var_fallback(primary: &str, fallback: &str) -> String {

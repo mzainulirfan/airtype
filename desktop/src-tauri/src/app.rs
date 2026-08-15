@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use serde_json::Value;
+use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::config::Config;
@@ -56,6 +56,12 @@ impl AppState {
         let channel = channel_name(&session_id);
         *self.inner.pairing_url.lock().unwrap() =
             pairing_url(&self.inner.config.pairing_base_url, &session_id);
+
+        eprintln!(
+            "[airtype] init realtime configured={} url_host={:?}",
+            self.inner.config.is_configured(),
+            self.inner.config.supabase_url.split('/').nth(2),
+        );
 
         if !self.inner.config.is_configured() {
             return Err(
@@ -163,10 +169,12 @@ pub fn toggle_pause(app: AppHandle) -> bool {
         state.inner.keyboard.release_all();
         *state.inner.last_activity.lock().unwrap() = Instant::now();
         emit_status(&app, "connected");
+        broadcast_status(&state.inner, "connected");
         return false;
     }
     state.inner.keyboard.release_all();
     emit_status(&app, "paused");
+    broadcast_status(&state.inner, "paused");
     true
 }
 
@@ -187,6 +195,23 @@ pub fn get_history(state: State<'_, AppState>) -> Vec<HistoryItem> {
 
 fn emit_status(app: &AppHandle, status: &str) {
     let _ = app.emit("airtype:status", status);
+}
+
+/// Broadcast `desktop_status` over the session channel so mobile clients see it.
+fn broadcast_status(inner: &Arc<AppInner>, status: &str) {
+    let cmd_tx = inner.cmd_tx.lock().unwrap();
+    let Some(tx) = cmd_tx.as_ref() else {
+        return;
+    };
+    let session_id = inner.session_id.lock().unwrap().clone();
+    let payload = json!({
+        "type": "desktop_status",
+        "eventId": format!("status-{}", chrono_now()),
+        "sessionId": session_id,
+        "status": status,
+        "timestamp": chrono_now(),
+    });
+    let _ = tx.try_send(RealtimeCommand::Send(payload));
 }
 
 fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
@@ -213,13 +238,30 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
         return;
     }
 
+    let event_type = value.get("type").and_then(Value::as_str).unwrap_or("");
+
+    // Presence events update pairing status and are not affected by pause.
+    match event_type {
+        "client_joined" => {
+            emit_status(app, "connected");
+            broadcast_status(inner, "connected");
+            return;
+        }
+        "client_left" => {
+            emit_status(app, "waiting_pairing");
+            broadcast_status(inner, "waiting_pairing");
+            return;
+        }
+        "desktop_status" => return,
+        _ => {}
+    }
+
     if inner.paused.load(Ordering::SeqCst) {
         return;
     }
 
     *inner.last_activity.lock().unwrap() = Instant::now();
 
-    let event_type = value.get("type").and_then(Value::as_str).unwrap_or("");
     let now = chrono_now();
 
     let (kind, code, text, result) = match event_type {

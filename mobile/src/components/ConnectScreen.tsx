@@ -15,7 +15,7 @@ export default function ConnectScreen({ initialSession, onConnect }: ConnectScre
     e.preventDefault()
     const value = sessionId.trim()
     if (!validateSessionId(value)) {
-      setError('Kode sesi tidak valid. Harus 32 karakter hex.')
+      setError('Kode sesi tidak valid. Harus 4 karakter hex.')
       return
     }
     setError(null)
@@ -53,7 +53,7 @@ export default function ConnectScreen({ initialSession, onConnect }: ConnectScre
             placeholder="Kode sesi"
             value={sessionId}
             onChange={(e) => setSessionId(e.target.value)}
-            maxLength={32}
+            maxLength={4}
           />
           {error && <div className="error">{error}</div>}
           <button type="submit" className="primary" disabled={!isSupabaseConfigured()}>

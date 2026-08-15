@@ -72,9 +72,28 @@ impl KeyboardSimulator {
             .ok_or_else(|| format!("unknown key code: {code}"))
     }
 
+    /// Modifier keys are driven entirely by the modifiers snapshot so the
+    /// explicit press/release below does not double-fire them.
+    fn is_modifier_code(code: &str) -> bool {
+        matches!(
+            code,
+            "ShiftLeft"
+                | "ShiftRight"
+                | "ControlLeft"
+                | "ControlRight"
+                | "AltLeft"
+                | "AltRight"
+                | "MetaLeft"
+                | "MetaRight"
+        )
+    }
+
     pub fn key_down(&self, code: &str, _key: &str, modifiers: &Modifiers) -> Result<(), String> {
         let mut inner = self.inner.lock().unwrap();
         Self::press_missing(&mut inner, modifiers);
+        if Self::is_modifier_code(code) {
+            return Ok(());
+        }
         let key = Self::resolve_key(code)?;
         inner
             .0
@@ -84,6 +103,10 @@ impl KeyboardSimulator {
 
     pub fn key_up(&self, code: &str, _key: &str, modifiers: &Modifiers) -> Result<(), String> {
         let mut inner = self.inner.lock().unwrap();
+        if Self::is_modifier_code(code) {
+            Self::release_unneeded(&mut inner, modifiers);
+            return Ok(());
+        }
         let key = Self::resolve_key(code)?;
         inner
             .0

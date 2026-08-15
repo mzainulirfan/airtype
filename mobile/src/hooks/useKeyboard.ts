@@ -67,7 +67,12 @@ export function useKeyboard({
   }, [])
 
   const sendKeyEvent = useCallback(
-    (type: 'key_down' | 'key_up', code: string, key: string) => {
+    (
+      type: 'key_down' | 'key_up',
+      code: string,
+      key: string,
+      mods: Modifiers = modifiersRef.current,
+    ) => {
       const payload: KeyEventPayload = {
         type,
         sessionId,
@@ -75,7 +80,7 @@ export function useKeyboard({
         clientId,
         code,
         key,
-        modifiers: { ...modifiersRef.current },
+        modifiers: { ...mods },
         timestamp: new Date().toISOString(),
       }
       return sendRef.current(payload)
@@ -83,20 +88,37 @@ export function useKeyboard({
     [sessionId, clientId],
   )
 
+  const releaseShiftLatch = useCallback(() => {
+    const mods = { ...modifiersRef.current, shift: false }
+    setModifiers(mods)
+    sendKeyEvent('key_up', 'ShiftLeft', 'Shift', mods)
+  }, [sendKeyEvent])
+
   const toggleModifier = useCallback(
     (code: string, key: string) => {
       if (code === 'CapsLock') {
         setCapsLock((c) => !c)
         return
       }
-      setModifiers((m) => {
-        if (code === 'ShiftLeft' || code === 'ShiftRight') return { ...m, shift: !m.shift }
-        if (code === 'ControlLeft' || code === 'ControlRight') return { ...m, ctrl: !m.ctrl }
-        if (code === 'AltLeft' || code === 'AltRight') return { ...m, alt: !m.alt }
-        if (code === 'MetaLeft') return { ...m, meta: !m.meta }
-        return m
-      })
-      sendKeyEvent('key_down', code, key)
+      const next = { ...modifiersRef.current }
+      let active: boolean
+      if (code === 'ShiftLeft' || code === 'ShiftRight') {
+        next.shift = !next.shift
+        active = next.shift
+      } else if (code === 'ControlLeft' || code === 'ControlRight') {
+        next.ctrl = !next.ctrl
+        active = next.ctrl
+      } else if (code === 'AltLeft' || code === 'AltRight') {
+        next.alt = !next.alt
+        active = next.alt
+      } else if (code === 'MetaLeft') {
+        next.meta = !next.meta
+        active = next.meta
+      } else {
+        return
+      }
+      setModifiers(next)
+      sendKeyEvent(active ? 'key_down' : 'key_up', code, key, next)
     },
     [sendKeyEvent],
   )
@@ -110,31 +132,26 @@ export function useKeyboard({
         return
       }
 
-      // Fast-path: pure text characters are buffered and bundled.
-      if (isPureText(key)) {
+      const { shift, ctrl, alt, meta } = modifiersRef.current
+
+      // Fast-path: pure text, without ctrl/alt/meta, can be bundled as type_text.
+      // Shift is safe here because the label already encodes the shift.
+      if (isPureText(key) && !ctrl && !alt && !meta) {
         bufferRef.current.push(key)
         scheduleFlush()
+        if (shift) releaseShiftLatch()
         return
       }
 
-      // Special keys: flush pending text, then send explicit down/up.
+      // Special keys and modifier combos need explicit key down/up.
       flushBuffer()
       sendKeyEvent('key_down', code, key)
       sendKeyEvent('key_up', code, key)
     },
-    [flushBuffer, scheduleFlush, sendKeyEvent, toggleModifier],
+    [flushBuffer, scheduleFlush, sendKeyEvent, toggleModifier, releaseShiftLatch],
   )
 
-  const release = useCallback(
-    (code: string, key: string) => {
-      if (pausedRef.current) return
-      if (isModifierCode(code)) {
-        sendKeyEvent('key_up', code, key)
-      }
-      // chars/special keys are fully handled in press()
-    },
-    [sendKeyEvent],
-  )
+  const release = useCallback(() => {}, [])
 
   const clearModifiers = useCallback(() => {
     setModifiers(initialModifiers)

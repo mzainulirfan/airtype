@@ -11,6 +11,7 @@ pub struct Modifiers {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // fields are populated by serde; read individually by callers
 pub struct KeyEventPayload {
     pub r#type: String,
     pub session_id: String,
@@ -24,6 +25,7 @@ pub struct KeyEventPayload {
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)] // fields are populated by serde; read individually by callers
 pub struct TypeTextPayload {
     pub r#type: String,
     pub session_id: String,

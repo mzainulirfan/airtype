@@ -27,9 +27,25 @@ export interface TypeTextPayload {
   timestamp: string
 }
 
-export type BroadcastPayload = KeyEventPayload | TypeTextPayload
+export type BroadcastPayload = KeyEventPayload | TypeTextPayload | DesktopStatusPayload | PresencePayload
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
+
+export interface DesktopStatusPayload {
+  type: 'desktop_status'
+  eventId: string
+  sessionId: string
+  status: 'waiting_pairing' | 'connected' | 'paused'
+  timestamp: string
+}
+
+export interface PresencePayload {
+  type: 'client_joined' | 'client_left'
+  eventId: string
+  sessionId: string
+  clientId: string
+  timestamp: string
+}
 
 export interface SessionInfo {
   sessionId: string

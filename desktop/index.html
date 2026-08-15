@@ -6,7 +6,29 @@
     <title>AirType Helper</title>
   </head>
   <body>
-    <div id="root"></div>
+    <h1>AirType Helper</h1>
+
+    <div class="card">
+      <h2>Status</h2>
+      <span id="status" class="status idle">Idle</span>
+    </div>
+
+    <div class="card">
+      <h2>Pairing</h2>
+      <div id="qr-code" class="qr-code hidden" aria-label="QR code pairing"></div>
+      <div id="session-code" class="session-code">—</div>
+      <div id="pairing-url" class="pairing-url">—</div>
+      <div class="buttons" style="margin-top: 12px">
+        <button id="pause" type="button">Pause</button>
+        <button id="new-session" type="button" class="secondary">Sesi Baru</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Riwayat</h2>
+      <div id="history"></div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -11,9 +11,17 @@ export interface RealtimeOptions {
 const HEARTBEAT_MS = 15000
 const CONNECTED_TIMEOUT_MS = 45000
 
+let presenceCounter = 0
+
+function nextPresenceId(clientId: string): string {
+  presenceCounter += 1
+  return `pres-${clientId}-${presenceCounter}-${Date.now().toString(36)}`
+}
+
 export function useRealtime(
   client: SupabaseClient | null,
   sessionId: string | null,
+  clientId: string,
   onMessage: (event: BroadcastPayload) => void,
 ) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected')
@@ -35,6 +43,14 @@ export function useRealtime(
     activeRef.current = channelName
     setStatus('connecting')
 
+    const presence = (type: 'client_joined' | 'client_left') => ({
+      type,
+      eventId: nextPresenceId(clientId),
+      sessionId,
+      clientId,
+      timestamp: new Date().toISOString(),
+    })
+
     const channel = client
       .channel(channelName, {
         config: { broadcast: { self: false } },
@@ -47,6 +63,9 @@ export function useRealtime(
         if (activeRef.current !== channelName) return
         if (state === 'SUBSCRIBED') {
           setStatus('connected')
+          channelRef.current
+            ?.send({ type: 'broadcast', event: 'airtype', payload: presence('client_joined') })
+            .catch(() => {})
         } else {
           setStatus('reconnecting')
         }
@@ -65,10 +84,13 @@ export function useRealtime(
     return () => {
       activeRef.current = null
       if (heartbeatRef.current) clearInterval(heartbeatRef.current)
+      channelRef.current
+        ?.send({ type: 'broadcast', event: 'airtype', payload: presence('client_left') })
+        .catch(() => {})
       client.removeChannel(channel)
       channelRef.current = null
     }
-  }, [client, sessionId])
+  }, [client, sessionId, clientId])
 
   const send = useCallback(
     (payload: BroadcastPayload) => {

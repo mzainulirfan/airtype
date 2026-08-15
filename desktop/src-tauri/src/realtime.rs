@@ -19,7 +19,7 @@ pub fn spawn_realtime(
     out_tx: mpsc::Sender<Value>,
     mut cmd_rx: mpsc::Receiver<RealtimeCommand>,
 ) {
-    tokio::spawn(async move {
+    tauri::async_runtime::spawn(async move {
         let mut retry = 1u64;
         loop {
             let clean = run_connection(&ws_url, &channel, &access_token, out_tx.clone(), &mut cmd_rx)

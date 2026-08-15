@@ -19,7 +19,9 @@ pub fn run() {
     tauri::Builder::default()
         .manage(AppState::new(Config::load()))
         .setup(|app| {
+            eprintln!("[airtype] app starting");
             setup_tray(app.handle())?;
+            eprintln!("[airtype] tray ready");
             Ok(())
         })
         .on_window_event(|window, event| {

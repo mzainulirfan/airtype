@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import QRCode from 'qrcode'
 import './styles.css'
 
 type Status = 'idle' | 'creating_session' | 'subscribing' | 'waiting_pairing' | 'connected' | 'paused' | 'reconnecting'
@@ -23,6 +24,7 @@ let currentStatus: Status = 'idle'
 let currentSession: SessionInfo | null = null
 
 const statusEl = () => document.getElementById('status') as HTMLElement
+const qrCodeEl = () => document.getElementById('qr-code') as HTMLElement
 const sessionCodeEl = () => document.getElementById('session-code') as HTMLElement
 const pairingUrlEl = () => document.getElementById('pairing-url') as HTMLElement
 const historyEl = () => document.getElementById('history') as HTMLElement
@@ -52,11 +54,26 @@ function renderSession(session: SessionInfo | null) {
   if (!session) {
     sessionCodeEl().textContent = '—'
     pairingUrlEl().textContent = '—'
+    qrCodeEl().innerHTML = ''
+    qrCodeEl().classList.add('hidden')
     return
   }
   sessionCodeEl().textContent = session.sessionId
   pairingUrlEl().textContent = session.pairingUrl
   pairingUrlEl().title = session.pairingUrl
+  if (session.pairingUrl) {
+    QRCode.toDataURL(session.pairingUrl, { width: 180, margin: 1 })
+      .then((url) => {
+        qrCodeEl().innerHTML = `<img src="${url}" alt="QR pairing" width="180" height="180" />`
+        qrCodeEl().classList.remove('hidden')
+      })
+      .catch((err) => {
+        console.error('QR generate failed:', err)
+      })
+  } else {
+    qrCodeEl().innerHTML = ''
+    qrCodeEl().classList.add('hidden')
+  }
 }
 
 function renderHistory(items: HistoryItem[]) {

@@ -17,14 +17,17 @@ export default function App() {
     return parsed?.sessionId ?? null
   })
   const [paused, setPaused] = useState(false)
+  const [desktopStatus, setDesktopStatus] = useState<'waiting_pairing' | 'connected' | 'paused' | null>(null)
 
   const client = useMemo(() => createSupabaseClient(), [])
 
-  const handleMessage = useCallback((_event: BroadcastPayload) => {
-    // Desktop status/ack bisa diproses di sini
+  const handleMessage = useCallback((event: BroadcastPayload) => {
+    if (event.type === 'desktop_status') {
+      setDesktopStatus(event.status)
+    }
   }, [])
 
-  const { status, send } = useRealtime(client, sessionId, handleMessage)
+  const { status, send } = useRealtime(client, sessionId, CLIENT_ID, handleMessage)
 
   const { modifiers, shiftLatch, capsLock, press, release, clearModifiers } = useKeyboard({
     sessionId: sessionId ?? '',
@@ -50,7 +53,12 @@ export default function App() {
 
   return (
     <div className="app">
-      <StatusBar status={status} paused={paused} onTogglePause={handleTogglePause} />
+      <StatusBar
+        status={status}
+        paused={paused}
+        desktopStatus={desktopStatus}
+        onTogglePause={handleTogglePause}
+      />
       <div className="keyboard-wrap">
         <Keyboard
           modifiers={modifiers}

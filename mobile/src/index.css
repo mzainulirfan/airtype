@@ -80,6 +80,13 @@ body {
   color: var(--danger);
 }
 
+.desktop-status {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--key-bg);
+}
+
 .pause-btn {
   margin-left: auto;
   padding: 6px 14px;

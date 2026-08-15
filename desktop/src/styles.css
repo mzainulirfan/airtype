@@ -55,6 +55,18 @@ h2 { font-size: 14px; color: var(--text-dim); margin-bottom: 8px; }
   margin-bottom: 8px;
 }
 
+.qr-code {
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px;
+  margin-bottom: 12px;
+  width: fit-content;
+}
+
+.qr-code.hidden {
+  display: none;
+}
+
 .pairing-url {
   font-size: 12px;
   color: var(--text-dim);
