@@ -58,19 +58,28 @@ export function useRealtime(
       timestamp: new Date().toISOString(),
     })
 
+    // The channel's send() throws synchronously when the channel is not
+    // joined yet (it can happen briefly during reconnects). Never let that
+    // escape into event handlers or the heartbeat timer.
+    const safeSend = (payload: BroadcastPayload) => {
+      const ch = channelRef.current
+      if (!ch) return
+      try {
+        ch.send({ type: 'broadcast', event: 'airtype', payload }).catch(() => {})
+      } catch {
+        /* channel not joined — ignore */
+      }
+    }
+
     const subscribeCb = (state: string) => {
       if (activeRef.current !== channelName) return
       if (state === 'SUBSCRIBED') {
         setBoth('connected')
-        channelRef.current
-          ?.send({ type: 'broadcast', event: 'airtype', payload: presence('client_joined') })
-          .catch(() => {})
+        safeSend(presence('client_joined'))
         if (presenceTimerRef.current) clearInterval(presenceTimerRef.current)
         presenceTimerRef.current = setInterval(() => {
           if (activeRef.current !== channelName) return
-          channelRef.current
-            ?.send({ type: 'broadcast', event: 'airtype', payload: presence('client_heartbeat') })
-            .catch(() => {})
+          safeSend(presence('client_heartbeat'))
         }, PRESENCE_HEARTBEAT_MS)
       } else {
         setBoth('reconnecting')
@@ -95,9 +104,7 @@ export function useRealtime(
         presenceTimerRef.current = null
       }
       if (sendLeft) {
-        channelRef.current
-          ?.send({ type: 'broadcast', event: 'airtype', payload: presence('client_left') })
-          .catch(() => {})
+        safeSend(presence('client_left'))
       }
       if (channelRef.current) {
         client.removeChannel(channelRef.current)
@@ -113,21 +120,37 @@ export function useRealtime(
       setupChannel()
     }
 
+    const rehandshake = () => {
+      if (!channelRef.current || statusRef.current !== 'connected') {
+        hardReconnect()
+        return
+      }
+      safeSend(presence('client_joined'))
+    }
+
     // Returning to the foreground: re-handshake with the desktop right away
     // (it may have flipped to waiting_pairing while we were backgrounded),
     // or hard-reconnect if we lost the link while away.
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return
       if (activeRef.current !== channelName) return
-      if (!channelRef.current || statusRef.current !== 'connected') {
-        hardReconnect()
-        return
-      }
-      channelRef.current
-        ?.send({ type: 'broadcast', event: 'airtype', payload: presence('client_joined') })
-        .catch(() => {})
+      rehandshake()
     }
     document.addEventListener('visibilitychange', onVisibility)
+
+    // Network came back (WiFi/cellular switch): reconnect immediately instead
+    // of waiting for the socket timeout.
+    const onOnline = () => {
+      if (activeRef.current !== channelName) return
+      rehandshake()
+    }
+    // Network dropped: stop pretending we are connected.
+    const onOffline = () => {
+      if (activeRef.current !== channelName) return
+      setBoth('reconnecting')
+    }
+    window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
 
     // Safety net: if we have been disconnected for too long, force a clean
     // re-subscribe instead of relying solely on the library's reconnect.
@@ -150,6 +173,8 @@ export function useRealtime(
     return () => {
       activeRef.current = null
       document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
       clearInterval(checkTimer)
       teardownChannel(true)
     }
@@ -158,20 +183,21 @@ export function useRealtime(
   const send = useCallback(
     (payload: BroadcastPayload) => {
       if (!client || !sessionId || !channelRef.current) return false
-      channelRef.current
-        .send({
-          type: 'broadcast',
-          event: 'airtype',
-          payload,
-        })
-        .then((res) => {
-          if (res === 'error' || res === 'timed out') {
-            setBoth('reconnecting')
-          }
-        })
-        .catch(() => {
-          setBoth('reconnecting')
-        })
+      const markReconnecting = () => setBoth('reconnecting')
+      try {
+        channelRef.current
+          .send({
+            type: 'broadcast',
+            event: 'airtype',
+            payload,
+          })
+          .then((res) => {
+            if (res === 'error' || res === 'timed out') markReconnecting()
+          })
+          .catch(markReconnecting)
+      } catch {
+        markReconnecting()
+      }
       return true
     },
     [client, sessionId, setBoth],

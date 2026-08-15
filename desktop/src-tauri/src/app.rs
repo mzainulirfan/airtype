@@ -67,9 +67,9 @@ impl AppState {
     }
 
     fn restart_realtime(&self, app: &AppHandle) -> Result<(), String> {
-        let session_id = self.inner.session_id.lock().unwrap().clone();
+        let session_id = self.inner.session_id.lock().unwrap_or_else(|e| e.into_inner()).clone();
         let channel = channel_name(&session_id);
-        *self.inner.pairing_url.lock().unwrap() =
+        *self.inner.pairing_url.lock().unwrap_or_else(|e| e.into_inner()) =
             pairing_url(&self.inner.config.pairing_base_url, &session_id);
 
         eprintln!(
@@ -92,13 +92,13 @@ impl AppState {
 
         let (out_tx, out_rx) = tokio::sync::mpsc::channel(256);
         let (cmd_tx, cmd_rx) = tokio::sync::mpsc::channel(64);
-        *self.inner.cmd_tx.lock().unwrap() = Some(cmd_tx);
-        *self.inner.out_rx.lock().unwrap() = Some(out_rx);
+        *self.inner.cmd_tx.lock().unwrap_or_else(|e| e.into_inner()) = Some(cmd_tx);
+        *self.inner.out_rx.lock().unwrap_or_else(|e| e.into_inner()) = Some(out_rx);
 
         // Abort any previous realtime task so we never accumulate zombie
         // websocket connections (they could exhaust the connection budget and
         // make the live link drop).
-        if let Some(prev) = self.inner.realtime_abort.lock().unwrap().take() {
+        if let Some(prev) = self.inner.realtime_abort.lock().unwrap_or_else(|e| e.into_inner()).take() {
             prev.abort();
         }
         let handle = spawn_realtime(
@@ -108,7 +108,7 @@ impl AppState {
             out_tx,
             cmd_rx,
         );
-        *self.inner.realtime_abort.lock().unwrap() = Some(handle);
+        *self.inner.realtime_abort.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
 
         self.start_message_loop(app);
         emit_status(app, "subscribing");
@@ -116,10 +116,10 @@ impl AppState {
     }
 
     fn start_message_loop(&self, app: &AppHandle) {
-        if let Some(prev) = self.inner.loop_abort.lock().unwrap().take() {
+        if let Some(prev) = self.inner.loop_abort.lock().unwrap_or_else(|e| e.into_inner()).take() {
             prev.abort();
         }
-        let rx = match self.inner.out_rx.lock().unwrap().take() {
+        let rx = match self.inner.out_rx.lock().unwrap_or_else(|e| e.into_inner()).take() {
             Some(rx) => rx,
             None => return,
         };
@@ -128,10 +128,19 @@ impl AppState {
         let handle = tauri::async_runtime::spawn(async move {
             let mut rx = rx;
             while let Some(value) = rx.recv().await {
-                handle_incoming(&inner, &app2, value);
+                // A panic here used to kill this task permanently, silently
+                // dropping every later key/mouse event while the connection
+                // still looked healthy ("connected but unresponsive"). Catch
+                // it so the loop keeps draining incoming messages.
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    handle_incoming(&inner, &app2, value);
+                }));
+                if result.is_err() {
+                    eprintln!("[airtype] recovered from panic in handle_incoming");
+                }
             }
         });
-        *self.inner.loop_abort.lock().unwrap() = Some(handle);
+        *self.inner.loop_abort.lock().unwrap_or_else(|e| e.into_inner()) = Some(handle);
     }
 }
 
@@ -158,7 +167,7 @@ pub fn init_app(app: AppHandle) -> Result<(), String> {
             // Presence watchdog: if the mobile has been silent for too long,
             // fall back to waiting_pairing (handles mobile dying without client_left).
             if !inner.paused.load(Ordering::SeqCst) {
-                let mobile_idle = inner.last_mobile_at.lock().unwrap().elapsed().as_secs();
+                let mobile_idle = inner.last_mobile_at.lock().unwrap_or_else(|e| e.into_inner()).elapsed().as_secs();
                 if mobile_idle > MOBILE_PRESENCE_TIMEOUT_SECS {
                     set_presence(&inner, &app2, "waiting_pairing");
                 }
@@ -168,12 +177,12 @@ pub fn init_app(app: AppHandle) -> Result<(), String> {
             if timeout == 0 {
                 continue;
             }
-            let idle = inner.last_activity.lock().unwrap().elapsed().as_millis() as u64;
+            let idle = inner.last_activity.lock().unwrap_or_else(|e| e.into_inner()).elapsed().as_millis() as u64;
             if idle > timeout && !inner.paused.load(Ordering::SeqCst) {
                 inner.paused.store(true, Ordering::SeqCst);
                 inner.auto_paused.store(true, Ordering::SeqCst);
                 inner.keyboard.release_all();
-                *inner.last_presence.lock().unwrap() = "paused".to_string();
+                *inner.last_presence.lock().unwrap_or_else(|e| e.into_inner()) = "paused".to_string();
                 let _ = app2.emit("airtype:status", "paused");
                 broadcast_status(&inner, "paused");
             }
@@ -186,11 +195,11 @@ pub fn init_app(app: AppHandle) -> Result<(), String> {
 pub fn new_session(app: AppHandle) -> Result<SessionInfo, String> {
     let state = app.state::<AppState>();
     // Stop old realtime connection cleanly.
-    if let Some(tx) = state.inner.cmd_tx.lock().unwrap().take() {
+    if let Some(tx) = state.inner.cmd_tx.lock().unwrap_or_else(|e| e.into_inner()).take() {
         let _ = tx.try_send(RealtimeCommand::Stop);
     }
-    *state.inner.session_id.lock().unwrap() = generate_session_id();
-    state.inner.dedup.lock().unwrap().clear();
+    *state.inner.session_id.lock().unwrap_or_else(|e| e.into_inner()) = generate_session_id();
+    state.inner.dedup.lock().unwrap_or_else(|e| e.into_inner()).clear();
     state.restart_realtime(&app)?;
     Ok(get_session_info(app.state::<AppState>()))
 }
@@ -204,16 +213,16 @@ pub fn toggle_pause(app: AppHandle) -> bool {
         state.inner.paused.store(false, Ordering::SeqCst);
         state.inner.auto_paused.store(false, Ordering::SeqCst);
         state.inner.keyboard.release_all();
-        *state.inner.last_activity.lock().unwrap() = Instant::now();
-        *state.inner.last_mobile_at.lock().unwrap() = Instant::now();
-        *state.inner.last_presence.lock().unwrap() = "connected".to_string();
+        *state.inner.last_activity.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
+        *state.inner.last_mobile_at.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
+        *state.inner.last_presence.lock().unwrap_or_else(|e| e.into_inner()) = "connected".to_string();
         emit_status(&app, "connected");
         broadcast_status(&state.inner, "connected");
         return false;
     }
     state.inner.keyboard.release_all();
     state.inner.auto_paused.store(false, Ordering::SeqCst);
-    *state.inner.last_presence.lock().unwrap() = "paused".to_string();
+    *state.inner.last_presence.lock().unwrap_or_else(|e| e.into_inner()) = "paused".to_string();
     emit_status(&app, "paused");
     broadcast_status(&state.inner, "paused");
     true
@@ -221,17 +230,17 @@ pub fn toggle_pause(app: AppHandle) -> bool {
 
 #[tauri::command]
 pub fn get_session_info(state: State<'_, AppState>) -> SessionInfo {
-    let session_id = state.inner.session_id.lock().unwrap().clone();
+    let session_id = state.inner.session_id.lock().unwrap_or_else(|e| e.into_inner()).clone();
     SessionInfo {
         session_id: session_id.clone(),
         channel: channel_name(&session_id),
-        pairing_url: state.inner.pairing_url.lock().unwrap().clone(),
+        pairing_url: state.inner.pairing_url.lock().unwrap_or_else(|e| e.into_inner()).clone(),
     }
 }
 
 #[tauri::command]
 pub fn get_history(state: State<'_, AppState>) -> Vec<HistoryItem> {
-    state.inner.history.lock().unwrap().iter().cloned().collect()
+    state.inner.history.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect()
 }
 
 fn emit_status(app: &AppHandle, status: &str) {
@@ -240,11 +249,11 @@ fn emit_status(app: &AppHandle, status: &str) {
 
 /// Broadcast `desktop_status` over the session channel so mobile clients see it.
 fn broadcast_status(inner: &Arc<AppInner>, status: &str) {
-    let cmd_tx = inner.cmd_tx.lock().unwrap();
+    let cmd_tx = inner.cmd_tx.lock().unwrap_or_else(|e| e.into_inner());
     let Some(tx) = cmd_tx.as_ref() else {
         return;
     };
-    let session_id = inner.session_id.lock().unwrap().clone();
+    let session_id = inner.session_id.lock().unwrap_or_else(|e| e.into_inner()).clone();
     let payload = json!({
         "type": "desktop_status",
         "eventId": format!("status-{}", chrono_now()),
@@ -257,7 +266,7 @@ fn broadcast_status(inner: &Arc<AppInner>, status: &str) {
 
 /// Update pairing status locally + broadcast it, but only when it changed.
 fn set_presence(inner: &Arc<AppInner>, app: &AppHandle, status: &str) {
-    let mut last = inner.last_presence.lock().unwrap();
+    let mut last = inner.last_presence.lock().unwrap_or_else(|e| e.into_inner());
     if *last == status {
         return;
     }
@@ -304,10 +313,10 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
     // The Realtime channel finished joining: we are subscribed.
     // Do NOT force waiting_pairing here: a brief network blip makes the
     // websocket reconnect and this event fire again even though a mobile is
-    // still connected — forcing waiting_pairing would make the phone report a
+    // still connected â€” forcing waiting_pairing would make the phone report a
     // lost connection. Re-confirm the current presence instead.
     if value.get("type").and_then(Value::as_str) == Some("realtime_ready") {
-        let last = inner.last_presence.lock().unwrap().clone();
+        let last = inner.last_presence.lock().unwrap_or_else(|e| e.into_inner()).clone();
         if last.is_empty() {
             set_presence(inner, app, "waiting_pairing");
         } else {
@@ -326,7 +335,7 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
         return;
     }
     {
-        let mut seen = inner.dedup.lock().unwrap();
+        let mut seen = inner.dedup.lock().unwrap_or_else(|e| e.into_inner());
         if seen.len() > 2000 {
             seen.clear();
         }
@@ -336,7 +345,7 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
     }
 
     let payload_session = value.get("sessionId").and_then(Value::as_str).unwrap_or("");
-    if payload_session != *inner.session_id.lock().unwrap() {
+    if payload_session != *inner.session_id.lock().unwrap_or_else(|e| e.into_inner()) {
         return;
     }
 
@@ -345,8 +354,8 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
     // Presence events update pairing status and are not affected by pause.
     match event_type {
         "client_joined" => {
-            *inner.last_mobile_at.lock().unwrap() = Instant::now();
-            *inner.last_activity.lock().unwrap() = Instant::now();
+            *inner.last_mobile_at.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
+            *inner.last_activity.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
             // A mobile reconnecting means the user wants to type again: undo an
             // idle auto-pause, but respect an explicit manual pause.
             if inner.paused.load(Ordering::SeqCst) {
@@ -361,18 +370,18 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
             }
             // Always confirm the fresh status to the joining mobile, even if the
             // desktop presence was already "connected" (stale join confirmation).
-            *inner.last_presence.lock().unwrap() = "connected".to_string();
+            *inner.last_presence.lock().unwrap_or_else(|e| e.into_inner()) = "connected".to_string();
             eprintln!("[airtype] presence: client_joined -> connected");
             emit_status(app, "connected");
             broadcast_status(inner, "connected");
             return;
         }
         "client_heartbeat" => {
-            *inner.last_mobile_at.lock().unwrap() = Instant::now();
+            *inner.last_mobile_at.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
             if inner.paused.load(Ordering::SeqCst) {
                 return;
             }
-            let mut last = inner.last_presence.lock().unwrap();
+            let mut last = inner.last_presence.lock().unwrap_or_else(|e| e.into_inner());
             if *last != "connected" {
                 *last = "connected".to_string();
                 drop(last);
@@ -394,7 +403,7 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
         return;
     }
 
-    *inner.last_activity.lock().unwrap() = Instant::now();
+    *inner.last_activity.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
 
     let now = chrono_now();
 
@@ -446,7 +455,7 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
             received_at: now,
             simulated: result.is_ok(),
         };
-        let mut history = inner.history.lock().unwrap();
+        let mut history = inner.history.lock().unwrap_or_else(|e| e.into_inner());
         history.push_front(item);
         if history.len() > inner.config.history_limit {
             history.pop_back();

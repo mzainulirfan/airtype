@@ -12,6 +12,11 @@ export function createSupabaseClient(): SupabaseClient | null {
       persistSession: false,
       autoRefreshToken: false,
     },
+    realtime: {
+      // Faster heartbeat => the client notices a dead/half-open socket sooner
+      // and reconnects instead of showing "connected" while nothing flows.
+      heartbeatIntervalMs: 10000,
+    },
   })
 }
 

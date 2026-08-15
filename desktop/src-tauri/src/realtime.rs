@@ -83,11 +83,22 @@ async fn run_connection(
         return false;
     }
 
+    // Half-open connections (NAT/proxy silently dropping the TCP link) never
+    // deliver a close frame, so the read loop below would hang forever while
+    // both apps still think they are connected. Track the last time anything
+    // arrived (server heartbeats, mobile broadcasts) and reconnect if it goes
+    // stale, even without an explicit close.
+    let stale_after = Duration::from_secs(45);
+    let mut last_seen = std::time::Instant::now();
+    let mut ticker = tokio::time::interval(Duration::from_secs(10));
+    ticker.tick().await; // consume the first immediate tick
+
     loop {
         tokio::select! {
             incoming = stream.next() => {
                 match incoming {
                     Some(Ok(Message::Text(text))) => {
+                        last_seen = std::time::Instant::now();
                         let parsed: Value = match serde_json::from_str(&text) {
                             Ok(v) => v,
                             Err(_) => continue,
@@ -101,7 +112,9 @@ async fn run_connection(
                             None => {}
                         }
                     }
-                    Some(Ok(_)) => {}
+                    Some(Ok(_)) => {
+                        last_seen = std::time::Instant::now();
+                    }
                     Some(Err(e)) => {
                         eprintln!("[realtime] read error: {e}");
                         return false;
@@ -136,6 +149,12 @@ async fn run_connection(
                     None => return true,
                 }
             }
+            _ = ticker.tick() => {
+                if last_seen.elapsed() > stale_after {
+                    eprintln!("[realtime] no traffic for {stale_after:?}, reconnecting");
+                    return false;
+                }
+            }
         }
     }
 }
@@ -160,20 +179,21 @@ async fn handle_message(
             let ref_ok = parsed.get("ref").and_then(Value::as_str) == Some("1");
             let status_ok = parsed.pointer("/payload/status").and_then(Value::as_str) == Some("ok");
             if ref_ok && status_ok {
-                let _ = out_tx.send(json!({ "type": "realtime_ready" })).await;
+                // try_send: never block the read loop on a full/slow consumer.
+                let _ = out_tx.try_send(json!({ "type": "realtime_ready" }));
             }
             None
         }
         // Incoming broadcast: forward inner payload to the app.
         "broadcast" => {
             if let Some(inner) = parsed.pointer("/payload/payload") {
-                let _ = out_tx.send(inner.clone()).await;
+                let _ = out_tx.try_send(inner.clone());
             }
             None
         }
         _ => {
             if parsed.get("topic").and_then(Value::as_str) == Some(channel) {
-                let _ = out_tx.send(parsed).await;
+                let _ = out_tx.try_send(parsed);
             }
             None
         }
