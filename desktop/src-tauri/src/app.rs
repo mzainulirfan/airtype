@@ -9,7 +9,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::config::Config;
 use crate::keyboard::KeyboardSimulator;
 use crate::realtime::{spawn_realtime, RealtimeCommand};
-use crate::session::{channel_name, generate_session_id, pairing_url, realtime_ws_url};
+use crate::session::{channel_name, generate_session_id, pairing_url, realtime_topic, realtime_ws_url};
 use crate::types::{HistoryItem, KeyEventPayload, SessionInfo, TypeTextPayload};
 
 pub struct AppState {
@@ -82,7 +82,7 @@ impl AppState {
 
         spawn_realtime(
             ws_url,
-            channel,
+            realtime_topic(&channel),
             self.inner.config.supabase_anon_key.clone(),
             out_tx,
             cmd_rx,
@@ -216,6 +216,13 @@ fn broadcast_status(inner: &Arc<AppInner>, status: &str) {
 }
 
 fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
+    // The Realtime channel finished joining: we are subscribed and waiting for a peer.
+    if value.get("type").and_then(Value::as_str) == Some("realtime_ready") {
+        emit_status(app, "waiting_pairing");
+        broadcast_status(inner, "waiting_pairing");
+        return;
+    }
+
     let event_id = value
         .get("eventId")
         .and_then(Value::as_str)

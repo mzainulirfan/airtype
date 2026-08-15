@@ -153,6 +153,15 @@ async fn handle_message(
             "payload": {},
             "ref": parsed.get("ref")
         })),
+        // Channel join confirmed: tell the app we are subscribed and ready.
+        "phx_reply" => {
+            let ref_ok = parsed.get("ref").and_then(Value::as_str) == Some("1");
+            let status_ok = parsed.pointer("/payload/status").and_then(Value::as_str) == Some("ok");
+            if ref_ok && status_ok {
+                let _ = out_tx.send(json!({ "type": "realtime_ready" })).await;
+            }
+            None
+        }
         // Incoming broadcast: forward inner payload to the app.
         "broadcast" => {
             if let Some(inner) = parsed.pointer("/payload/payload") {

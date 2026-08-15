@@ -8,6 +8,12 @@ pub fn channel_name(session_id: &str) -> String {
     format!("airtype:session:{session_id}")
 }
 
+/// Full Realtime topic for a channel. The Supabase Realtime service expects
+/// topics to be prefixed with `realtime:` (supabase-js does this automatically).
+pub fn realtime_topic(channel: &str) -> String {
+    format!("realtime:{channel}")
+}
+
 /// Build the Supabase Realtime WebSocket URL from a project URL + anon key.
 pub fn realtime_ws_url(supabase_url: &str, anon_key: &str) -> String {
     let base = supabase_url.trim_end_matches('/');
