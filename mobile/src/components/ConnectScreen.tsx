@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { validateSessionId } from '../lib/session'
 import { isSupabaseConfigured } from '../lib/supabase'
+
+const QrScanner = lazy(() => import('./QrScanner'))
 
 interface ConnectScreenProps {
   initialSession?: string
@@ -10,6 +12,7 @@ interface ConnectScreenProps {
 export default function ConnectScreen({ initialSession, onConnect }: ConnectScreenProps) {
   const [sessionId, setSessionId] = useState(initialSession ?? '')
   const [error, setError] = useState<string | null>(null)
+  const [scanning, setScanning] = useState(false)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -20,6 +23,16 @@ export default function ConnectScreen({ initialSession, onConnect }: ConnectScre
     }
     setError(null)
     onConnect(value)
+  }
+
+  const handleScan = (value: string) => {
+    setScanning(false)
+    if (validateSessionId(value)) {
+      setSessionId(value)
+      onConnect(value)
+    } else {
+      setError('QR tidak berisi kode sesi yang valid.')
+    }
   }
 
   return (
@@ -36,7 +49,7 @@ export default function ConnectScreen({ initialSession, onConnect }: ConnectScre
           </svg>
         </div>
         <h1>AirType</h1>
-        <p>Masukkan kode sesi dari Desktop Helper untuk terhubung.</p>
+        <p>Masukkan kode sesi dari Desktop Helper, atau pindai QR-nya.</p>
 
         {!isSupabaseConfigured() && (
           <div className="notice">
@@ -59,8 +72,22 @@ export default function ConnectScreen({ initialSession, onConnect }: ConnectScre
           <button type="submit" className="primary" disabled={!isSupabaseConfigured()}>
             Hubungkan
           </button>
+          <button
+            type="button"
+            className="secondary"
+            disabled={!isSupabaseConfigured()}
+            onClick={() => setScanning(true)}
+          >
+            Pindai QR
+          </button>
         </form>
       </div>
+
+      {scanning && (
+        <Suspense fallback={<div className="scanner-overlay" />}>
+          <QrScanner onResult={handleScan} onClose={() => setScanning(false)} />
+        </Suspense>
+      )}
     </div>
   )
 }

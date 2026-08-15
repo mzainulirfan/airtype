@@ -1,3 +1,4 @@
+/* ---------- Theme (dark default) ---------- */
 :root {
   --bg: #0f172a;
   --bg-soft: #1e293b;
@@ -10,8 +11,40 @@
   --accent: #38bdf8;
   --danger: #ef4444;
   --success: #34d399;
+  --border: #1e293b;
   --radius: 8px;
+  --key-height: 46px;
+  --key-font: 16px;
+  --peek-bg: #38bdf8;
+  --peek-text: #0f172a;
   font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+html[data-theme='light'] {
+  --bg: #eef2f7;
+  --bg-soft: #ffffff;
+  --key-bg: #e2e8f0;
+  --key-bg-special: #cbd5e1;
+  --key-bg-mod: #a78bfa;
+  --key-active: #0ea5e9;
+  --text: #0f172a;
+  --text-dim: #64748b;
+  --accent: #0ea5e9;
+  --danger: #dc2626;
+  --success: #059669;
+  --border: #e2e8f0;
+  --peek-bg: #0ea5e9;
+  --peek-text: #ffffff;
+}
+
+html[data-key-size='small'] {
+  --key-height: 40px;
+  --key-font: 14px;
+}
+
+html[data-key-size='large'] {
+  --key-height: 56px;
+  --key-font: 18px;
 }
 
 * {
@@ -35,6 +68,7 @@ body {
   color: var(--text);
   overflow: hidden;
   overscroll-behavior: none;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
 .app {
@@ -45,7 +79,7 @@ body {
     env(safe-area-inset-bottom) env(safe-area-inset-left);
 }
 
-/* Status bar */
+/* ---------- Status bar ---------- */
 .status-bar {
   display: flex;
   align-items: center;
@@ -80,17 +114,44 @@ body {
   color: var(--danger);
 }
 
+.status-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .desktop-status {
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 12px;
   background: var(--key-bg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icon-btn {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.icon-btn:active {
+  background: var(--key-bg);
+  color: var(--text);
 }
 
 .pause-btn {
-  margin-left: auto;
   padding: 6px 14px;
-  border: 1px solid var(--key-bg);
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-soft);
   color: var(--text);
@@ -107,7 +168,7 @@ body {
   50% { opacity: 0.4; }
 }
 
-/* Keyboard */
+/* ---------- Keyboard ---------- */
 .keyboard-wrap {
   flex: 1;
   display: flex;
@@ -122,6 +183,30 @@ body {
   gap: 8px;
 }
 
+.layer-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 0 2px 2px;
+}
+
+.layer-tab {
+  min-width: 48px;
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: var(--text-dim);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.layer-tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--peek-text);
+}
+
 .key-row {
   display: flex;
   gap: 6px;
@@ -129,14 +214,15 @@ body {
 }
 
 .key {
+  position: relative;
   flex: 1;
   min-width: 0;
-  height: 46px;
+  height: var(--key-height);
   border: none;
   border-radius: var(--radius);
   background: var(--key-bg);
   color: var(--text);
-  font-size: 16px;
+  font-size: var(--key-font);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -146,37 +232,64 @@ body {
 
 .key.special {
   background: var(--key-bg-special);
-  font-size: 13px;
+  font-size: calc(var(--key-font) - 3px);
 }
 
 .key.modifier {
   background: var(--key-bg-mod);
-  font-size: 12px;
+  font-size: calc(var(--key-font) - 4px);
 }
 
 .key.modifier.active,
 .key.active {
   background: var(--key-active);
-  color: #0f172a;
+  color: var(--peek-text);
 }
 
 .key:active {
   background: var(--key-active);
-  color: #0f172a;
+  color: var(--peek-text);
 }
 
 .key-space {
-  flex: 6;
+  flex: 5;
 }
 
-.key-row:nth-child(3) .key:first-child,
-.key-row:nth-child(3) .key:last-child {
+.key-backspace,
+.key-enter {
   flex: 1.6;
 }
 
-.key-row:nth-child(4) .key:first-child,
-.key-row:nth-child(4) .key:last-child {
-  flex: 2.2;
+.key-shift {
+  flex: 1.7;
+}
+
+/* Key peek (preview above key) */
+.key-peek {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.6);
+  min-width: 40px;
+  height: 44px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--peek-bg);
+  color: var(--peek-text);
+  font-size: 24px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.08s ease, transform 0.08s ease;
+  z-index: 10;
+}
+
+.key.char.is-pressed .key-peek {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
 }
 
 .session-info {
@@ -189,51 +302,7 @@ body {
   white-space: nowrap;
 }
 
-/* Install prompt */
-.install-prompt {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 24px 16px;
-  padding: 10px 12px;
-  background: var(--bg-soft);
-  border: 1px solid var(--key-bg);
-  border-radius: 12px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-
-.install-prompt-text {
-  flex: 1;
-  line-height: 1.4;
-}
-
-.install-prompt-btn {
-  flex-shrink: 0;
-  padding: 6px 14px;
-  border: none;
-  border-radius: var(--radius);
-  background: var(--accent);
-  color: #0f172a;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.install-prompt-close {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 18px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-/* Connect screen */
+/* ---------- Connect screen ---------- */
 .connect-outer {
   height: 100dvh;
   display: flex;
@@ -256,6 +325,7 @@ body {
   width: 100%;
   max-width: 420px;
   background: var(--bg-soft);
+  border: 1px solid var(--border);
   border-radius: 16px;
   padding: 32px 24px;
   text-align: center;
@@ -283,14 +353,16 @@ body {
 }
 
 .connect-card input {
-  padding: 12px 14px;
+  padding: 14px;
   border-radius: var(--radius);
-  border: 1px solid var(--key-bg);
+  border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
-  font-size: 16px;
+  font-size: 22px;
+  font-weight: 600;
   text-align: center;
-  letter-spacing: 1px;
+  letter-spacing: 4px;
+  text-transform: lowercase;
   outline: none;
 }
 
@@ -301,6 +373,37 @@ body {
 .connect-card .error {
   color: var(--danger);
   font-size: 13px;
+}
+
+button.primary {
+  padding: 14px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: var(--peek-text);
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.secondary {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+button.secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .notice {
@@ -320,18 +423,240 @@ body {
   border-radius: 4px;
 }
 
-button.primary {
-  padding: 14px;
+/* ---------- Install prompt ---------- */
+.install-prompt {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 24px 16px;
+  padding: 10px 12px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.install-prompt-text {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.install-prompt-btn {
+  flex-shrink: 0;
+  padding: 6px 14px;
   border: none;
   border-radius: var(--radius);
   background: var(--accent);
-  color: #0f172a;
-  font-size: 16px;
+  color: var(--peek-text);
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }
 
-button.primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.install-prompt-close {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* ---------- Settings panel ---------- */
+.settings-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+}
+
+.settings-panel {
+  width: 100%;
+  max-width: 480px;
+  max-height: 85dvh;
+  overflow-y: auto;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 16px 16px 0 0;
+  padding: 16px 20px calc(20px + env(safe-area-inset-bottom));
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.settings-header h2 {
+  font-size: 18px;
+}
+
+.settings-header .close {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: var(--key-bg);
+  color: var(--text);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-row:last-child {
+  border-bottom: none;
+}
+
+.settings-row-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-row-label span {
+  font-size: 14px;
+}
+
+.settings-row-label small {
+  color: var(--text-dim);
+  font-size: 12px;
+}
+
+.settings-row-control {
+  flex-shrink: 0;
+}
+
+.segmented {
+  display: flex;
+  gap: 4px;
+  background: var(--key-bg);
+  border-radius: var(--radius);
+  padding: 3px;
+}
+
+.segmented button {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.segmented button.active {
+  background: var(--accent);
+  color: var(--peek-text);
+  font-weight: 600;
+}
+
+.switch {
+  position: relative;
+  width: 46px;
+  height: 26px;
+  border: none;
+  border-radius: 999px;
+  background: var(--key-bg-special);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.switch.on {
+  background: var(--success);
+}
+
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: left 0.15s ease;
+}
+
+.switch.on .switch-thumb {
+  left: 23px;
+}
+
+/* ---------- QR scanner ---------- */
+.scanner-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 200;
+}
+
+.scanner-box {
+  position: relative;
+  width: min(90vw, 420px);
+}
+
+.scanner-video {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 12px;
+}
+
+.scanner-canvas {
+  display: none;
+}
+
+.scanner-frame {
+  position: absolute;
+  inset: 12%;
+  border: 3px solid var(--accent);
+  border-radius: 16px;
+  box-shadow: 0 0 0 100vmax rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+.scanner-hint {
+  color: #cbd5e1;
+  font-size: 14px;
+  text-align: center;
+  margin-top: 8px;
+}
+
+.scanner-error {
+  color: #fca5a5;
+  font-size: 14px;
+  text-align: center;
+  margin-top: 8px;
+  padding: 0 16px;
+}
+
+.scanner-close {
+  padding: 12px 32px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 15px;
+  cursor: pointer;
 }

@@ -1,5 +1,6 @@
-import type { KeyRow } from '../lib/keys'
-import { ALL_ROWS, NAV_KEYS, FUNCTION_KEYS } from '../lib/keys'
+import { useMemo, useState } from 'react'
+import type { KeyDefinition } from '../lib/keys'
+import { getLayer, vibrate, type LayerId } from '../lib/keys'
 import type { Modifiers } from '../types'
 import KeyButton from './KeyButton'
 
@@ -7,6 +8,8 @@ interface KeyboardProps {
   modifiers: Modifiers
   shiftLatch: boolean
   capsLock: boolean
+  autoReturnToLetters: boolean
+  haptic: boolean
   onPress: (code: string, key: string) => void
   onRelease: (code: string, key: string) => void
 }
@@ -29,46 +32,82 @@ function isModifierActive(code: string, modifiers: Modifiers): boolean {
   }
 }
 
-function renderRow(
-  row: KeyRow,
-  modifiers: Modifiers,
-  shiftLatch: boolean,
-  capsLock: boolean,
-  onPress: KeyboardProps['onPress'],
-  onRelease: KeyboardProps['onRelease'],
-) {
-  const shift = modifiers.shift || shiftLatch
-  return (
-    <div className="key-row" key={`row-${row.keys[0].code}`}>
-      {row.keys.map((def) => (
-        <KeyButton
-          key={def.code}
-          def={def}
-          shift={shift}
-          caps={capsLock}
-          activeModifier={isModifierActive(def.code, modifiers)}
-          onPress={onPress}
-          onRelease={onRelease}
-        />
-      ))}
-    </div>
-  )
-}
-
 export default function Keyboard({
   modifiers,
   shiftLatch,
   capsLock,
+  autoReturnToLetters,
+  haptic,
   onPress,
   onRelease,
 }: KeyboardProps) {
+  const [layer, setLayer] = useState<LayerId>('letters')
+  const layerDef = getLayer(layer)
+  const shift = modifiers.shift || shiftLatch
+
+  const defLookup = useMemo(() => {
+    const map = new Map<string, KeyDefinition>()
+    for (const row of layerDef.rows) {
+      for (const def of row.keys) {
+        map.set(def.code, def)
+      }
+    }
+    return map
+  }, [layerDef])
+
+  const handleLayerChange = (target: LayerId) => {
+    setLayer(target)
+  }
+
+  const handlePress = (code: string, key: string) => {
+    const def = defLookup.get(code)
+    const momentary =
+      def?.kind === 'char' ||
+      (def?.kind === 'special' && (def.code === 'Space' || def.code === 'Enter'))
+    if (autoReturnToLetters && layer !== 'letters' && momentary) {
+      setLayer('letters')
+    }
+    onPress(code, key)
+  }
+
   return (
     <div className="keyboard">
-      {renderRow(NAV_KEYS, modifiers, shiftLatch, capsLock, onPress, onRelease)}
-      {ALL_ROWS.map((row) =>
-        renderRow(row, modifiers, shiftLatch, capsLock, onPress, onRelease),
-      )}
-      {renderRow(FUNCTION_KEYS, modifiers, shiftLatch, capsLock, onPress, onRelease)}
+      <div className="layer-bar" role="tablist" aria-label="Layer keyboard">
+        {(['letters', 'symbols', 'fn'] as LayerId[]).map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={layer === id}
+            className={`layer-tab ${layer === id ? 'active' : ''}`}
+            onPointerDown={(e) => {
+              e.preventDefault()
+              if (haptic) vibrate()
+              setLayer(id)
+            }}
+          >
+            {getLayer(id).label}
+          </button>
+        ))}
+      </div>
+
+      {layerDef.rows.map((row) => (
+        <div className="key-row" key={`${layer}-${row.keys[0].code}`}>
+          {row.keys.map((def) => (
+            <KeyButton
+              key={def.code}
+              def={def}
+              shift={shift}
+              caps={capsLock}
+              activeModifier={isModifierActive(def.code, modifiers)}
+              haptic={haptic}
+              onPress={handlePress}
+              onRelease={onRelease}
+              onLayerChange={handleLayerChange}
+            />
+          ))}
+        </div>
+      ))}
     </div>
   )
 }

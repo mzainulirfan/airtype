@@ -2,7 +2,9 @@ import { useCallback, useMemo, useState } from 'react'
 import ConnectScreen from './components/ConnectScreen'
 import InstallPrompt from './components/InstallPrompt'
 import Keyboard from './components/Keyboard'
+import SettingsPanel from './components/SettingsPanel'
 import StatusBar from './components/StatusBar'
+import { SettingsProvider, useSettings } from './context/SettingsContext'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useRealtime } from './hooks/useRealtime'
 import { useWakeLock } from './hooks/useWakeLock'
@@ -12,13 +14,17 @@ import type { BroadcastPayload } from './types'
 
 const CLIENT_ID = `mobile-${Math.random().toString(36).slice(2, 10)}`
 
-export default function App() {
+function AppInner() {
+  const { settings } = useSettings()
   const [sessionId, setSessionId] = useState<string | null>(() => {
     const parsed = parseSessionFromUrl(window.location.href)
     return parsed?.sessionId ?? null
   })
   const [paused, setPaused] = useState(false)
-  const [desktopStatus, setDesktopStatus] = useState<'waiting_pairing' | 'connected' | 'paused' | null>(null)
+  const [showSettings, setShowSettings] = useState(false)
+  const [desktopStatus, setDesktopStatus] = useState<
+    'waiting_pairing' | 'connected' | 'paused' | null
+  >(null)
 
   const client = useMemo(() => createSupabaseClient(), [])
 
@@ -35,6 +41,8 @@ export default function App() {
     clientId: CLIENT_ID,
     send,
     paused,
+    haptic: settings.haptic,
+    strictMode: settings.strictMode,
   })
 
   const handleTogglePause = useCallback(() => {
@@ -62,17 +70,29 @@ export default function App() {
         paused={paused}
         desktopStatus={desktopStatus}
         onTogglePause={handleTogglePause}
+        onOpenSettings={() => setShowSettings(true)}
       />
       <div className="keyboard-wrap">
         <Keyboard
           modifiers={modifiers}
           shiftLatch={shiftLatch}
           capsLock={capsLock}
+          autoReturnToLetters={settings.autoReturnToLetters}
+          haptic={settings.haptic}
           onPress={press}
           onRelease={release}
         />
       </div>
       <div className="session-info">Sesi: {getChannelName(sessionId)}</div>
+      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <SettingsProvider>
+      <AppInner />
+    </SettingsProvider>
   )
 }

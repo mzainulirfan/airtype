@@ -8,6 +8,8 @@ export interface KeyboardOptions {
   send: (payload: BroadcastPayload) => boolean
   textBurstMs?: number
   paused?: boolean
+  haptic?: boolean
+  strictMode?: boolean
   onLatency?: (ms: number) => void
 }
 
@@ -28,19 +30,27 @@ export function useKeyboard({
   send,
   textBurstMs = 80,
   paused = false,
+  haptic = true,
+  strictMode = false,
   onLatency,
 }: KeyboardOptions) {
   const [modifiers, setModifiers] = useState<Modifiers>(initialModifiers)
   const [capsLock, setCapsLock] = useState(false)
   const modifiersRef = useRef(modifiers)
   modifiersRef.current = modifiers
+  const capsLockRef = useRef(capsLock)
+  capsLockRef.current = capsLock
 
   const bufferRef = useRef<string[]>([])
   const burstTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const sendRef = useRef(send)
   const pausedRef = useRef(paused)
+  const hapticRef = useRef(haptic)
+  const strictModeRef = useRef(strictMode)
   sendRef.current = send
   pausedRef.current = paused
+  hapticRef.current = haptic
+  strictModeRef.current = strictMode
 
   const flushBuffer = useCallback(() => {
     if (bufferRef.current.length === 0) return
@@ -128,7 +138,7 @@ export function useKeyboard({
   const press = useCallback(
     (code: string, key: string) => {
       if (pausedRef.current) return
-      vibrate()
+      if (hapticRef.current) vibrate()
 
       if (isModifierCode(code) || code === 'CapsLock') {
         toggleModifier(code, key)
@@ -139,7 +149,7 @@ export function useKeyboard({
 
       // Fast-path: pure text, without ctrl/alt/meta, can be bundled as type_text.
       // Shift is safe here because the label already encodes the shift.
-      if (isPureText(key) && !ctrl && !alt && !meta) {
+      if (isPureText(key) && !ctrl && !alt && !meta && !strictModeRef.current) {
         bufferRef.current.push(key)
         if (bufferRef.current.length >= MAX_BURST_CHARS) {
           flushBuffer()
@@ -152,6 +162,18 @@ export function useKeyboard({
 
       // Special keys and modifier combos need explicit key down/up.
       flushBuffer()
+
+      // In strict mode (and for caps in any mode), encode a capital via a
+      // momentary Shift around the char so desktop modifier state stays clean.
+      if (isPureText(key) && (shift || capsLockRef.current)) {
+        const withShift = { ...modifiersRef.current, shift: true }
+        const withoutShift = { ...modifiersRef.current, shift: false }
+        sendKeyEvent('key_down', code, key, withShift)
+        sendKeyEvent('key_up', code, key, withoutShift)
+        if (shift) releaseShiftLatch()
+        return
+      }
+
       sendKeyEvent('key_down', code, key)
       sendKeyEvent('key_up', code, key)
     },

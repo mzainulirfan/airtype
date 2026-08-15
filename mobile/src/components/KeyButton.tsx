@@ -1,7 +1,8 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
 import type { KeyDefinition } from '../lib/keys'
-import { keyLabel } from '../lib/keys'
+import { keyLabel, vibrate } from '../lib/keys'
+import type { LayerId } from '../lib/keys'
 
 const HOLD_DELAY_MS = 400
 const REPEAT_MS = 70
@@ -11,8 +12,10 @@ interface KeyButtonProps {
   shift: boolean
   caps: boolean
   activeModifier: boolean
+  haptic: boolean
   onPress: (code: string, key: string) => void
   onRelease: (code: string, key: string) => void
+  onLayerChange?: (target: LayerId) => void
 }
 
 export default function KeyButton({
@@ -20,15 +23,22 @@ export default function KeyButton({
   shift,
   caps,
   activeModifier,
+  haptic,
   onPress,
   onRelease,
+  onLayerChange,
 }: KeyButtonProps) {
+  const [pressed, setPressed] = useState(false)
   const label = keyLabel(def, shift, caps)
   const className = [
     'key',
     def.kind,
     def.code === 'Space' ? 'key-space' : '',
+    def.code === 'Backspace' ? 'key-backspace' : '',
+    def.code === 'Enter' ? 'key-enter' : '',
+    def.code === 'ShiftLeft' || def.code === 'ShiftRight' ? 'key-shift' : '',
     activeModifier ? 'active' : '',
+    pressed ? 'is-pressed' : '',
   ]
     .filter(Boolean)
     .join(' ')
@@ -57,6 +67,12 @@ export default function KeyButton({
 
   const handlePointerDown = (e: MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
+    if (def.kind === 'layer') {
+      if (haptic) vibrate()
+      if (def.layerTarget) onLayerChange?.(def.layerTarget)
+      return
+    }
+    setPressed(true)
     const key = def.kind === 'char' ? labelRef.current : def.label
     onPressRef.current(def.code, key)
     // Hold-to-repeat for momentary keys only (never modifiers).
@@ -70,7 +86,10 @@ export default function KeyButton({
 
   const handlePointerUp = () => {
     stopRepeat()
-    onReleaseRef.current(def.code, def.kind === 'char' ? labelRef.current : def.label)
+    if (pressed) {
+      setPressed(false)
+      onReleaseRef.current(def.code, def.kind === 'char' ? labelRef.current : def.label)
+    }
   }
 
   return (
@@ -83,6 +102,7 @@ export default function KeyButton({
       onPointerCancel={handlePointerUp}
       onContextMenu={(e) => e.preventDefault()}
     >
+      {def.kind === 'char' && <span className="key-peek">{label}</span>}
       <span>{label}</span>
     </button>
   )
