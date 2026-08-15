@@ -1,0 +1,23 @@
+[package]
+name = "airtype-desktop"
+version = "0.1.0"
+description = "AirType Desktop Helper"
+edition = "2021"
+
+[lib]
+name = "airtype_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.6.3", features = [] }
+
+[dependencies]
+tauri = { version = "2.11.5", features = ["tray-icon", "image-png", "image-ico"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+tokio-tungstenite = "0.30"
+futures-util = "0.3"
+enigo = { version = "0.6.1", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+url = "2"

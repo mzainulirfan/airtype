@@ -1,0 +1,14 @@
+node_modules/
+dist/
+src-tauri/target/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store

@@ -1,0 +1,276 @@
+:root {
+  --bg: #0f172a;
+  --bg-soft: #1e293b;
+  --key-bg: #334155;
+  --key-bg-special: #475569;
+  --key-bg-mod: #7c3aed;
+  --key-active: #38bdf8;
+  --text: #f8fafc;
+  --text-dim: #94a3b8;
+  --accent: #38bdf8;
+  --danger: #ef4444;
+  --success: #34d399;
+  --radius: 8px;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Status bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-dim);
+}
+
+.status-bar.connected .status-dot {
+  background: var(--success);
+}
+
+.status-bar.reconnecting .status-dot,
+.status-bar.connecting .status-dot {
+  background: #f59e0b;
+  animation: pulse 1s infinite;
+}
+
+.status-bar.paused .status-dot {
+  background: var(--danger);
+}
+
+.status-bar.paused .status-label {
+  color: var(--danger);
+}
+
+.pause-btn {
+  margin-left: auto;
+  padding: 6px 14px;
+  border: 1px solid var(--key-bg);
+  border-radius: var(--radius);
+  background: var(--bg-soft);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.pause-btn:active {
+  background: var(--key-bg);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Keyboard */
+.keyboard-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 8px;
+}
+
+.keyboard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.key-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.key {
+  flex: 1;
+  min-width: 0;
+  height: 46px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--key-bg);
+  color: var(--text);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.05s;
+}
+
+.key.special {
+  background: var(--key-bg-special);
+  font-size: 13px;
+}
+
+.key.modifier {
+  background: var(--key-bg-mod);
+  font-size: 12px;
+}
+
+.key.modifier.active,
+.key.active {
+  background: var(--key-active);
+  color: #0f172a;
+}
+
+.key:active {
+  background: var(--key-active);
+  color: #0f172a;
+}
+
+.key-space {
+  flex: 6;
+}
+
+.key-row:nth-child(3) .key:first-child,
+.key-row:nth-child(3) .key:last-child {
+  flex: 1.6;
+}
+
+.key-row:nth-child(4) .key:first-child,
+.key-row:nth-child(4) .key:last-child {
+  flex: 2.2;
+}
+
+.session-info {
+  text-align: center;
+  padding: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Connect screen */
+.connect-screen {
+  height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.connect-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-soft);
+  border-radius: 16px;
+  padding: 32px 24px;
+  text-align: center;
+}
+
+.connect-logo {
+  margin-bottom: 12px;
+}
+
+.connect-card h1 {
+  font-size: 28px;
+  margin-bottom: 8px;
+}
+
+.connect-card p {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.connect-card form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.connect-card input {
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--key-bg);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 16px;
+  text-align: center;
+  letter-spacing: 1px;
+  outline: none;
+}
+
+.connect-card input:focus {
+  border-color: var(--accent);
+}
+
+.connect-card .error {
+  color: var(--danger);
+  font-size: 13px;
+}
+
+.notice {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: #fcd34d;
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 12px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.notice code {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+button.primary {
+  padding: 14px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
