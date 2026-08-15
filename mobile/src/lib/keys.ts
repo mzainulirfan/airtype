@@ -249,6 +249,29 @@ export function isPureText(key: string): boolean {
   return key.length === 1
 }
 
+/** Special keys must always be sent as key events, never as text.
+ * Some have single-glyph labels (⌫, ⏎, ←) that would otherwise look
+ * like pure text and get fast-pathed. */
+const SPECIAL_CODES = new Set([
+  'Enter',
+  'NumpadEnter',
+  'Backspace',
+  'Tab',
+  'Delete',
+  'Home',
+  'End',
+  'PageUp',
+  'PageDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'ArrowUp',
+  'ArrowDown',
+])
+
+export function isSpecialCode(code: string): boolean {
+  return SPECIAL_CODES.has(code)
+}
+
 export function isModifierCode(code: string): boolean {
   return Boolean(MODIFIER_KEYS[code])
 }

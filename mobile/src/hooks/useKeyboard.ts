@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BroadcastPayload, KeyEventPayload, Modifiers } from '../types'
-import { isModifierCode, isPureText, vibrate } from '../lib/keys'
+import { isModifierCode, isPureText, isSpecialCode, vibrate } from '../lib/keys'
 
 export interface KeyboardOptions {
   sessionId: string
@@ -149,7 +149,7 @@ export function useKeyboard({
 
       // Fast-path: pure text, without ctrl/alt/meta, can be bundled as type_text.
       // Shift is safe here because the label already encodes the shift.
-      if (isPureText(key) && !ctrl && !alt && !meta && !strictModeRef.current) {
+      if (isPureText(key) && !isSpecialCode(code) && !ctrl && !alt && !meta && !strictModeRef.current) {
         bufferRef.current.push(key)
         if (bufferRef.current.length >= MAX_BURST_CHARS) {
           flushBuffer()
@@ -165,7 +165,7 @@ export function useKeyboard({
 
       // In strict mode (and for caps in any mode), encode a capital via a
       // momentary Shift around the char so desktop modifier state stays clean.
-      if (isPureText(key) && (shift || capsLockRef.current)) {
+      if (isPureText(key) && !isSpecialCode(code) && (shift || capsLockRef.current)) {
         const withShift = { ...modifiersRef.current, shift: true }
         const withoutShift = { ...modifiersRef.current, shift: false }
         sendKeyEvent('key_down', code, key, withShift)
