@@ -11,10 +11,11 @@ import { useKeyboard } from './hooks/useKeyboard'
 import { useRealtime } from './hooks/useRealtime'
 import { useWakeLock } from './hooks/useWakeLock'
 import { createSupabaseClient, getChannelName } from './lib/supabase'
-import { parseSessionFromUrl } from './lib/session'
+import { parseSessionFromUrl, validateSessionId } from './lib/session'
 import type { BroadcastPayload, EchoToken } from './types'
 
 const CLIENT_ID = `mobile-${Math.random().toString(36).slice(2, 10)}`
+const SESSION_STORAGE_KEY = 'airtype_session'
 
 interface PreviewState {
   text: string
@@ -75,8 +76,15 @@ function applyPreviewToken(prev: PreviewState, token: EchoToken): PreviewState {
 function AppInner() {
   const { settings } = useSettings()
   const [sessionId, setSessionId] = useState<string | null>(() => {
-    const parsed = parseSessionFromUrl(window.location.href)
-    return parsed?.sessionId ?? null
+    const urlSession = parseSessionFromUrl(window.location.href)?.sessionId
+    if (urlSession) return urlSession
+    try {
+      const stored = localStorage.getItem(SESSION_STORAGE_KEY)
+      if (stored && validateSessionId(stored)) return stored
+    } catch {
+      /* storage unavailable */
+    }
+    return null
   })
   const [paused, setPaused] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
@@ -115,6 +123,24 @@ function AppInner() {
     setPreview({ text: '', cursor: 0 })
   }, [sessionId])
 
+  // Remember the session across refreshes so the user does not have to scan
+  // the QR code again. Cleared when the user explicitly disconnects.
+  useEffect(() => {
+    try {
+      if (sessionId) {
+        localStorage.setItem(SESSION_STORAGE_KEY, sessionId)
+      } else {
+        localStorage.removeItem(SESSION_STORAGE_KEY)
+      }
+    } catch {
+      /* storage unavailable */
+    }
+  }, [sessionId])
+
+  const handleDisconnect = useCallback(() => {
+    setSessionId(null)
+  }, [])
+
   const handleTogglePause = useCallback(() => {
     setPaused((p) => {
       if (p) clearModifiers()
@@ -140,6 +166,7 @@ function AppInner() {
         paused={paused}
         desktopStatus={desktopStatus}
         onTogglePause={handleTogglePause}
+        onDisconnect={handleDisconnect}
         onOpenSettings={() => setShowSettings(true)}
       />
       <TypingPreview

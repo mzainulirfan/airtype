@@ -163,6 +163,11 @@ body {
   background: var(--key-bg);
 }
 
+.pause-btn.danger-btn {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
 @keyframes pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }

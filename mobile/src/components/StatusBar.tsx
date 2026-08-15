@@ -5,6 +5,7 @@ interface StatusBarProps {
   paused: boolean
   desktopStatus: 'waiting_pairing' | 'connected' | 'paused' | null
   onTogglePause: () => void
+  onDisconnect: () => void
   onOpenSettings: () => void
 }
 
@@ -26,6 +27,7 @@ export default function StatusBar({
   paused,
   desktopStatus,
   onTogglePause,
+  onDisconnect,
   onOpenSettings,
 }: StatusBarProps) {
   const cls = paused ? 'paused' : status
@@ -44,6 +46,9 @@ export default function StatusBar({
       </button>
       <button type="button" onClick={onTogglePause} className="pause-btn">
         {paused ? 'Resume' : 'Pause'}
+      </button>
+      <button type="button" onClick={onDisconnect} className="pause-btn danger-btn">
+        Putus
       </button>
     </div>
   )
