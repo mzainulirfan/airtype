@@ -186,7 +186,12 @@ function AppInner() {
         onClear={() => setPreview({ text: '', cursor: 0 })}
       />
       <QuickActions onChord={runChord} />
-      <Touchpad onMove={mouseMove} onButton={mouseButton} onScroll={mouseScroll} />
+      <Touchpad
+        onMove={mouseMove}
+        onButton={mouseButton}
+        onScroll={mouseScroll}
+        sensitivity={settings.cursorSensitivity}
+      />
       <div className="keyboard-wrap">
         <Keyboard
           modifiers={modifiers}

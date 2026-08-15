@@ -1,16 +1,21 @@
 import type { ReactNode } from 'react'
-import { useSettings, type KeySize, type ThemePreference } from '../context/SettingsContext'
+import {
+  useSettings,
+  type CursorSensitivity,
+  type KeySize,
+  type ThemePreference,
+} from '../context/SettingsContext'
 
 interface SettingsPanelProps {
   onClose: () => void
 }
 
-interface SegmentedOption<T extends string> {
+interface SegmentedOption<T extends string | number> {
   value: T
   label: string
 }
 
-function Segmented<T extends string>({
+function Segmented<T extends string | number>({
   options,
   value,
   onChange,
@@ -112,6 +117,18 @@ export default function SettingsPanel({ onClose }: SettingsPanelProps) {
 
           <Row label="Mode key ketat" hint="Kirim ketukan asli alih-alih teks cepat (untuk game)">
             <Switch checked={settings.strictMode} onChange={(v) => update({ strictMode: v })} />
+          </Row>
+
+          <Row label="Sensitivitas kursor" hint="Kecepatan gerak kursor & scroll touchpad">
+            <Segmented<CursorSensitivity>
+              options={[
+                { value: 1, label: 'Rendah' },
+                { value: 1.5, label: 'Sedang' },
+                { value: 2, label: 'Tinggi' },
+              ]}
+              value={settings.cursorSensitivity}
+              onChange={(v) => update({ cursorSensitivity: v })}
+            />
           </Row>
         </div>
       </div>

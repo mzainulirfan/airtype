@@ -10,6 +10,7 @@ import {
 
 export type ThemePreference = 'system' | 'light' | 'dark'
 export type KeySize = 'small' | 'default' | 'large'
+export type CursorSensitivity = 1 | 1.5 | 2
 
 export interface Settings {
   haptic: boolean
@@ -17,6 +18,7 @@ export interface Settings {
   theme: ThemePreference
   autoReturnToLetters: boolean
   strictMode: boolean
+  cursorSensitivity: CursorSensitivity
 }
 
 const STORAGE_KEY = 'airtype_settings'
@@ -27,6 +29,7 @@ const DEFAULTS: Settings = {
   theme: 'system',
   autoReturnToLetters: true,
   strictMode: false,
+  cursorSensitivity: 1.5,
 }
 
 interface SettingsContextValue {

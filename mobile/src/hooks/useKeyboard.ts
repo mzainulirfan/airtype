@@ -366,6 +366,7 @@ export function useKeyboard({
   const mouseButton = useCallback(
     (action: 'down' | 'up', button: MouseButton = 'left') => {
       if (pausedRef.current) return
+      if (action === 'down' && hapticRef.current) vibrate()
       sendRef.current({
         type: 'mouse',
         sessionId,

@@ -6,9 +6,10 @@ interface TouchpadProps {
   onMove: (dx: number, dy: number) => void
   onButton: (action: 'down' | 'up', button: MouseButton) => void
   onScroll: (delta: number, axis: 'vertical' | 'horizontal') => void
+  /** Cursor sensitivity multiplier (also scales scroll speed). */
+  sensitivity?: number
 }
 
-const MOVE_SENSITIVITY = 1.5
 const MOVE_MAX_DELTA = 60
 const TAP_MAX_DIST = 12
 const TAP_MAX_MS = 200
@@ -25,11 +26,16 @@ interface PointerState {
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v))
 
-export default function Touchpad({ onMove, onButton, onScroll }: TouchpadProps) {
+export default function Touchpad({
+  onMove,
+  onButton,
+  onScroll,
+  sensitivity = 1.5,
+}: TouchpadProps) {
   const surfaceRef = useRef<HTMLDivElement>(null)
   const pointersRef = useRef<Map<number, PointerState>>(new Map())
-  const scrollAccRef = useRef(0)
-  const gestureStartRef = useRef(0)
+  const scrollAccXRef = useRef(0)
+  const scrollAccYRef = useRef(0)
   const multiFingerRef = useRef(false)
   const dragActiveRef = useRef(false)
 
@@ -38,10 +44,10 @@ export default function Touchpad({ onMove, onButton, onScroll }: TouchpadProps) 
     surfaceRef.current?.setPointerCapture(e.pointerId)
     const map = pointersRef.current
     if (map.size === 0) {
-      gestureStartRef.current = Date.now()
       multiFingerRef.current = false
       dragActiveRef.current = false
-      scrollAccRef.current = 0
+      scrollAccXRef.current = 0
+      scrollAccYRef.current = 0
     } else {
       multiFingerRef.current = true
     }
@@ -72,17 +78,25 @@ export default function Touchpad({ onMove, onButton, onScroll }: TouchpadProps) 
         onButton('down', 'left')
       }
       onMove(
-        clamp(Math.round(dx * MOVE_SENSITIVITY), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
-        clamp(Math.round(dy * MOVE_SENSITIVITY), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
+        clamp(Math.round(dx * sensitivity), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
+        clamp(Math.round(dy * sensitivity), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
       )
     } else {
-      // Two fingers (or the last finger of a two-finger gesture): scroll.
-      // Positive dy (swipe down) scrolls the page down.
-      scrollAccRef.current += dy
-      const notches = Math.trunc(scrollAccRef.current / SCROLL_THRESHOLD_PX)
-      if (notches !== 0) {
-        scrollAccRef.current -= notches * SCROLL_THRESHOLD_PX
-        onScroll(notches, 'vertical')
+      // Two fingers (or the last finger of a two-finger gesture): scroll in
+      // both axes. Positive dx scrolls right, positive dy scrolls down.
+      // Higher sensitivity crosses the notch threshold sooner (faster scroll).
+      const threshold = Math.max(4, SCROLL_THRESHOLD_PX / sensitivity)
+      scrollAccXRef.current += dx
+      scrollAccYRef.current += dy
+      const notchesX = Math.trunc(scrollAccXRef.current / threshold)
+      const notchesY = Math.trunc(scrollAccYRef.current / threshold)
+      if (notchesX !== 0) {
+        scrollAccXRef.current -= notchesX * threshold
+        onScroll(notchesX, 'horizontal')
+      }
+      if (notchesY !== 0) {
+        scrollAccYRef.current -= notchesY * threshold
+        onScroll(notchesY, 'vertical')
       }
     }
   }
@@ -108,17 +122,18 @@ export default function Touchpad({ onMove, onButton, onScroll }: TouchpadProps) 
         onButton('up', 'left')
       }
     }
-    scrollAccRef.current = 0
+    scrollAccXRef.current = 0
+    scrollAccYRef.current = 0
     multiFingerRef.current = false
     dragActiveRef.current = false
-    void gestureStartRef
   }
 
   const handlePointerCancel = (e: PointerEvent<HTMLDivElement>) => {
     const map = pointersRef.current
     if (map.delete(e.pointerId) && map.size === 0) {
       if (dragActiveRef.current) onButton('up', 'left')
-      scrollAccRef.current = 0
+      scrollAccXRef.current = 0
+      scrollAccYRef.current = 0
       multiFingerRef.current = false
       dragActiveRef.current = false
     }
