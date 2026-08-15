@@ -36,6 +36,11 @@ const MAX_BURST_CHARS = 12
 
 const DOUBLE_TAP_SHIFT_MS = 320
 
+/** How long to hold a chord modifier (e.g. Alt) before tapping the key. */
+const CHORD_HOLD_MS = 250
+/** How long to keep the modifier held after the key tap before releasing. */
+const CHORD_RELEASE_MS = 150
+
 /** How often to flush accumulated mouse-move deltas (ms). */
 const MOUSE_MOVE_FLUSH_MS = 24
 
@@ -100,6 +105,7 @@ export function useKeyboard({
   const mouseAccXRef = useRef(0)
   const mouseAccYRef = useRef(0)
   const mouseTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const chordTimersRef = useRef<ReturnType<typeof setTimeout>[]>([])
   sendRef.current = send
   pausedRef.current = paused
   hapticRef.current = haptic
@@ -121,6 +127,11 @@ export function useKeyboard({
     if (sent) onLatency?.(0)
   }, [sessionId, clientId, onLatency])
 
+  const clearChordTimers = useCallback(() => {
+    chordTimersRef.current.forEach((t) => clearTimeout(t))
+    chordTimersRef.current = []
+  }, [])
+
   const scheduleFlush = useCallback(() => {
     if (burstTimerRef.current) clearTimeout(burstTimerRef.current)
     burstTimerRef.current = setTimeout(flushBuffer, textBurstMs)
@@ -130,8 +141,9 @@ export function useKeyboard({
     return () => {
       if (burstTimerRef.current) clearTimeout(burstTimerRef.current)
       if (mouseTimerRef.current) clearInterval(mouseTimerRef.current)
+      clearChordTimers()
     }
-  }, [])
+  }, [clearChordTimers])
 
   const sendKeyEvent = useCallback(
     (
@@ -290,11 +302,14 @@ export function useKeyboard({
 
   /** Fire a shortcut chord (e.g. Ctrl+A) as a burst of key events without
    * touching the on-screen modifier latch state. Modifiers are pressed via
-   * their snapshot, then released with an empty snapshot at the end. */
+   * their snapshot, then released with an empty snapshot at the end. Chords
+   * flagged `hold` (OS shell shortcuts like Alt+Tab) keep the modifier held
+   * briefly before and after the key tap, otherwise Windows ignores them. */
   const runChord = useCallback(
     (chord: Chord) => {
       if (pausedRef.current) return
       if (hapticRef.current) vibrate()
+      clearChordTimers()
       flushBuffer()
       const mods: Modifiers = { ...initialModifiers, ...chord.mods }
       const modCode = mods.shift
@@ -307,16 +322,32 @@ export function useKeyboard({
               ? 'MetaLeft'
               : null
       const modKey = modCode ? modCode.replace('Left', '') : ''
-      if (modCode) {
-        sendKeyEvent('key_down', modCode, modKey, mods)
+      const tapKey = () => {
+        sendKeyEvent('key_down', chord.key.code, chord.key.key, mods)
+        sendKeyEvent('key_up', chord.key.code, chord.key.key, mods)
       }
-      sendKeyEvent('key_down', chord.key.code, chord.key.key, mods)
-      sendKeyEvent('key_up', chord.key.code, chord.key.key, mods)
-      if (modCode) {
+      if (!modCode) {
+        tapKey()
+        return
+      }
+      sendKeyEvent('key_down', modCode, modKey, mods)
+      if (!chord.hold) {
+        tapKey()
         sendKeyEvent('key_up', modCode, modKey, initialModifiers)
+        return
       }
+      chordTimersRef.current.push(
+        setTimeout(() => {
+          tapKey()
+          chordTimersRef.current.push(
+            setTimeout(() => {
+              sendKeyEvent('key_up', modCode, modKey, initialModifiers)
+            }, CHORD_RELEASE_MS),
+          )
+        }, CHORD_HOLD_MS),
+      )
     },
-    [flushBuffer, sendKeyEvent],
+    [flushBuffer, sendKeyEvent, clearChordTimers],
   )
 
   const clearModifiers = useCallback(() => {

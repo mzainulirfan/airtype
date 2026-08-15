@@ -4,6 +4,9 @@ export interface Chord {
   label: string
   key: { code: string; key: string }
   mods: Partial<Modifiers>
+  /** Hold the modifier briefly before/after the tap. Needed for OS shell
+   * shortcuts like Alt+Tab that only respond to a real held modifier. */
+  hold?: boolean
 }
 
 export const QUICK_ACTION_GROUPS: Chord[][] = [
@@ -17,9 +20,8 @@ export const QUICK_ACTION_GROUPS: Chord[][] = [
   ],
   [
     { label: 'Tab', key: { code: 'Tab', key: 'Tab' }, mods: {} },
-    { label: 'Ctrl+Tab', key: { code: 'Tab', key: 'Tab' }, mods: { ctrl: true } },
-    { label: 'Alt+Tab', key: { code: 'Tab', key: 'Tab' }, mods: { alt: true } },
-    { label: 'Win+Tab', key: { code: 'Tab', key: 'Tab' }, mods: { meta: true } },
+    { label: 'Alt+Tab', key: { code: 'Tab', key: 'Tab' }, mods: { alt: true }, hold: true },
+    { label: 'Win+Tab', key: { code: 'Tab', key: 'Tab' }, mods: { meta: true }, hold: true },
   ],
   [
     { label: 'Esc', key: { code: 'Escape', key: 'Escape' }, mods: {} },
