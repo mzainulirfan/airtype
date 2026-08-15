@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import type { KeyDefinition } from '../lib/keys'
 import { getLayer, type LayerId } from '../lib/keys'
 import type { Modifiers } from '../types'
@@ -10,6 +9,8 @@ interface KeyboardProps {
   capsLock: boolean
   autoReturnToLetters: boolean
   haptic: boolean
+  layer: LayerId
+  onLayerChange: (target: LayerId) => void
   onPress: (code: string, key: string, def?: KeyDefinition) => void
   onRelease: (code: string, key: string) => void
 }
@@ -38,32 +39,33 @@ export default function Keyboard({
   capsLock,
   autoReturnToLetters,
   haptic,
+  layer,
+  onLayerChange,
   onPress,
   onRelease,
 }: KeyboardProps) {
-  const [layer, setLayer] = useState<LayerId>('letters')
   const layerDef = getLayer(layer)
   const shift = modifiers.shift || shiftLatch
 
-  const handleLayerChange = (target: LayerId) => {
-    setLayer(target)
-  }
-
   const handlePress = (code: string, key: string, def?: KeyDefinition) => {
     // Only auto-return from the fn layer (function keys are momentary by
-    // nature). The symbols/#+= layers stay put like a normal phone keyboard.
+    // nature) and from the nav layer when finishing the task view (Enter/Esc).
+    // The symbols/#+= layers stay put like a normal phone keyboard.
     const isMomentary =
       def?.kind === 'char' ||
       (def?.kind === 'special' &&
-        (def.code === 'Space' || def.code === 'Enter' || layer === 'fn'))
-    if (autoReturnToLetters && layer === 'fn' && isMomentary) {
-      setLayer('letters')
+        (def.code === 'Space' ||
+          def.code === 'Enter' ||
+          layer === 'fn' ||
+          (layer === 'nav' && def.code === 'Escape')))
+    if (autoReturnToLetters && (layer === 'fn' || layer === 'nav') && isMomentary) {
+      onLayerChange('letters')
     }
     onPress(code, key, def)
   }
 
   return (
-    <div className="keyboard">
+    <div className={layer === 'nav' ? 'keyboard nav' : 'keyboard'}>
       {layerDef.rows.map((row, rowIdx) => (
         <div className="key-row" key={`${layer}-${rowIdx}`}>
           {row.keys.map((def) => (
@@ -76,7 +78,7 @@ export default function Keyboard({
               haptic={haptic}
               onPress={handlePress}
               onRelease={onRelease}
-              onLayerChange={handleLayerChange}
+              onLayerChange={onLayerChange}
             />
           ))}
         </div>

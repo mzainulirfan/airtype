@@ -13,6 +13,8 @@ import { useRealtime } from './hooks/useRealtime'
 import { useWakeLock } from './hooks/useWakeLock'
 import { createSupabaseClient, getChannelName } from './lib/supabase'
 import { parseSessionFromUrl, validateSessionId } from './lib/session'
+import type { Chord } from './lib/chords'
+import type { LayerId } from './lib/keys'
 import type { BroadcastPayload, EchoToken } from './types'
 
 const CLIENT_ID = `mobile-${Math.random().toString(36).slice(2, 10)}`
@@ -89,6 +91,7 @@ function AppInner() {
   })
   const [paused, setPaused] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [keyboardLayer, setKeyboardLayer] = useState<LayerId>('letters')
   const [preview, setPreview] = useState<PreviewState>({ text: '', cursor: 0 })
   const [desktopStatus, setDesktopStatus] = useState<
     'waiting_pairing' | 'connected' | 'paused' | null
@@ -159,6 +162,18 @@ function AppInner() {
     })
   }, [clearModifiers])
 
+  const handleChord = useCallback(
+    (chord: Chord) => {
+      runChord(chord)
+      // Win+Tab opens the Windows task view; show arrow keys so the user can
+      // navigate the window thumbnails right away.
+      if (chord.label === 'Win+Tab') {
+        setKeyboardLayer('nav')
+      }
+    },
+    [runChord],
+  )
+
   useWakeLock(Boolean(sessionId) && !paused)
 
   if (!sessionId) {
@@ -185,7 +200,7 @@ function AppInner() {
         cursor={preview.cursor}
         onClear={() => setPreview({ text: '', cursor: 0 })}
       />
-      <QuickActions onChord={runChord} />
+      <QuickActions onChord={handleChord} />
       <Touchpad
         onMove={mouseMove}
         onButton={mouseButton}
@@ -199,6 +214,8 @@ function AppInner() {
           capsLock={capsLock}
           autoReturnToLetters={settings.autoReturnToLetters}
           haptic={settings.haptic}
+          layer={keyboardLayer}
+          onLayerChange={setKeyboardLayer}
           onPress={press}
           onRelease={release}
         />

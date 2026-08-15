@@ -1,6 +1,6 @@
 import type { Modifiers } from '../types'
 
-export type LayerId = 'letters' | 'symbols' | 'extended' | 'fn'
+export type LayerId = 'letters' | 'symbols' | 'extended' | 'fn' | 'nav'
 
 export interface KeyDefinition {
   code: string
@@ -281,6 +281,32 @@ const FN_ROW_6: KeyRow = {
   ],
 }
 
+/* ---------- Nav layer (Win+Tab task view navigation) ---------- */
+
+const NAV_ROW_1: KeyRow = {
+  keys: [
+    specialKey('ArrowLeft', '←'),
+    specialKey('ArrowUp', '↑'),
+    specialKey('ArrowRight', '→'),
+  ],
+}
+
+const NAV_ROW_2: KeyRow = {
+  keys: [
+    specialKey('Escape', 'Esc'),
+    specialKey('ArrowDown', '↓'),
+    specialKey('Enter', '⏎'),
+  ],
+}
+
+const NAV_ROW_3: KeyRow = {
+  keys: [
+    layerKey('LayerLetters', 'ABC', 'letters'),
+    specialKey('Space', ' '),
+    specialKey('Backspace', '⌫'),
+  ],
+}
+
 export const LAYERS: KeyLayer[] = [
   {
     id: 'letters',
@@ -301,6 +327,11 @@ export const LAYERS: KeyLayer[] = [
     id: 'fn',
     label: 'Fn',
     rows: [FN_ROW_1, FN_ROW_2, FN_ROW_3, FN_ROW_4, FN_ROW_5, FN_ROW_6],
+  },
+  {
+    id: 'nav',
+    label: 'Nav',
+    rows: [NAV_ROW_1, NAV_ROW_2, NAV_ROW_3],
   },
 ]
 

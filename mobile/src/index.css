@@ -409,6 +409,16 @@ body {
   flex: 5;
 }
 
+/* Nav layer (Win+Tab task view): bigger arrow keys for easy navigation. */
+.keyboard.nav .key {
+  height: calc(var(--key-height) * 1.3);
+  font-size: calc(var(--key-font) + 6px);
+}
+
+.keyboard.nav .key.special {
+  font-size: calc(var(--key-font) + 6px);
+}
+
 .key-backspace,
 .key-enter {
   flex: 1.6;
