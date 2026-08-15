@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import ConnectScreen from './components/ConnectScreen'
 import InstallPrompt from './components/InstallPrompt'
 import Keyboard from './components/Keyboard'
+import QuickActions from './components/QuickActions'
 import SettingsPanel from './components/SettingsPanel'
 import StatusBar from './components/StatusBar'
 import TypingPreview from './components/TypingPreview'
@@ -98,15 +99,16 @@ function AppInner() {
     setPreview((prev) => applyPreviewToken(prev, token))
   }, [])
 
-  const { modifiers, shiftLatch, capsLock, press, release, clearModifiers } = useKeyboard({
-    sessionId: sessionId ?? '',
-    clientId: CLIENT_ID,
-    send,
-    paused,
-    haptic: settings.haptic,
-    strictMode: settings.strictMode,
-    onEcho: applyEcho,
-  })
+  const { modifiers, shiftLatch, capsLock, press, release, runChord, clearModifiers } =
+    useKeyboard({
+      sessionId: sessionId ?? '',
+      clientId: CLIENT_ID,
+      send,
+      paused,
+      haptic: settings.haptic,
+      strictMode: settings.strictMode,
+      onEcho: applyEcho,
+    })
 
   // Fresh preview per session.
   useEffect(() => {
@@ -145,6 +147,7 @@ function AppInner() {
         cursor={preview.cursor}
         onClear={() => setPreview({ text: '', cursor: 0 })}
       />
+      <QuickActions onChord={runChord} />
       <div className="keyboard-wrap">
         <Keyboard
           modifiers={modifiers}

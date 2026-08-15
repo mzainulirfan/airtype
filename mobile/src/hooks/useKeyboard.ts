@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { BroadcastPayload, EchoToken, KeyEventPayload, Modifiers } from '../types'
 import type { KeyDefinition } from '../lib/keys'
 import { isModifierCode, isPureText, isSpecialCode, vibrate } from '../lib/keys'
+import type { Chord } from '../lib/chords'
 
 export interface KeyboardOptions {
   sessionId: string
@@ -274,10 +275,49 @@ export function useKeyboard({
 
   const release = useCallback(() => {}, [])
 
+  /** Fire a shortcut chord (e.g. Ctrl+A) as a burst of key events without
+   * touching the on-screen modifier latch state. Modifiers are pressed via
+   * their snapshot, then released with an empty snapshot at the end. */
+  const runChord = useCallback(
+    (chord: Chord) => {
+      if (pausedRef.current) return
+      if (hapticRef.current) vibrate()
+      flushBuffer()
+      const mods: Modifiers = { ...initialModifiers, ...chord.mods }
+      const modCode = mods.shift
+        ? 'ShiftLeft'
+        : mods.ctrl
+          ? 'ControlLeft'
+          : mods.alt
+            ? 'AltLeft'
+            : mods.meta
+              ? 'MetaLeft'
+              : null
+      const modKey = modCode ? modCode.replace('Left', '') : ''
+      if (modCode) {
+        sendKeyEvent('key_down', modCode, modKey, mods)
+      }
+      sendKeyEvent('key_down', chord.key.code, chord.key.key, mods)
+      sendKeyEvent('key_up', chord.key.code, chord.key.key, mods)
+      if (modCode) {
+        sendKeyEvent('key_up', modCode, modKey, initialModifiers)
+      }
+    },
+    [flushBuffer, sendKeyEvent],
+  )
+
   const clearModifiers = useCallback(() => {
     setModifiers(initialModifiers)
     setCapsLock(false)
   }, [])
 
-  return { modifiers, shiftLatch: modifiers.shift, capsLock, press, release, clearModifiers }
+  return {
+    modifiers,
+    shiftLatch: modifiers.shift,
+    capsLock,
+    press,
+    release,
+    runChord,
+    clearModifiers,
+  }
 }

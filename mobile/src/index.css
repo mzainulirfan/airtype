@@ -266,6 +266,37 @@ body {
   font-size: 13px;
 }
 
+.quick-actions {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 8px 6px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.quick-actions::-webkit-scrollbar {
+  display: none;
+}
+
+.qa-btn {
+  flex: 0 0 auto;
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--key-bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.qa-btn:active {
+  background: var(--key-bg-special);
+  transform: scale(0.96);
+}
+
 .key-row {
   display: flex;
   gap: 6px;
