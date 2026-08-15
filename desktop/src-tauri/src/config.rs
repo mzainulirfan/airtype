@@ -1,3 +1,5 @@
+include!(concat!(env!("OUT_DIR"), "/generated_config.rs"));
+
 pub struct Config {
     pub supabase_url: String,
     pub supabase_anon_key: String,
@@ -11,8 +13,14 @@ impl Config {
     pub fn load() -> Self {
         load_dotenv();
         Config {
-            supabase_url: env_var_fallback("AIRTYPE_SUPABASE_URL", "SUPABASE_URL"),
-            supabase_anon_key: env_var_fallback("AIRTYPE_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY"),
+            supabase_url: env_first_baked(
+                &["AIRTYPE_SUPABASE_URL", "SUPABASE_URL"],
+                BAKED_SUPABASE_URL,
+            ),
+            supabase_anon_key: env_first_baked(
+                &["AIRTYPE_SUPABASE_ANON_KEY", "SUPABASE_ANON_KEY"],
+                BAKED_SUPABASE_ANON_KEY,
+            ),
             pairing_base_url: env_or("AIRTYPE_PAIRING_BASE_URL", "https://airtype.app"),
             auto_pause_after_ms: env_u64("AIRTYPE_AUTO_PAUSE_AFTER_MS", 60_000),
             history_enabled: env_bool("AIRTYPE_HISTORY_ENABLED", true),
@@ -63,10 +71,15 @@ fn load_dotenv() {
     }
 }
 
-fn env_var_fallback(primary: &str, fallback: &str) -> String {
-    std::env::var(primary)
-        .or_else(|_| std::env::var(fallback))
-        .unwrap_or_default()
+fn env_first_baked(keys: &[&str], baked: &str) -> String {
+    for key in keys {
+        if let Ok(value) = std::env::var(key) {
+            if !value.is_empty() {
+                return value;
+            }
+        }
+    }
+    baked.to_string()
 }
 
 fn env_u64(key: &str, default: u64) -> u64 {

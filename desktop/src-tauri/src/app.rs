@@ -119,12 +119,13 @@ pub fn init_app(app: AppHandle) -> Result<(), String> {
     if state.inner.init_started.swap(true, Ordering::SeqCst) {
         return Ok(());
     }
-    state.restart_realtime(&app)?;
-
+    // Show the window first so the UI is always visible, even if the
+    // realtime connection cannot be established (frontend displays the error).
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.set_focus();
     }
+    state.restart_realtime(&app)?;
 
     let inner = state.inner.clone();
     let app2 = app.clone();
