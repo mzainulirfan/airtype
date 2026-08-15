@@ -23,6 +23,8 @@ pub struct AppInner {
     pub config: Config,
     pub session_id: Mutex<String>,
     pub paused: AtomicBool,
+    /// True when `paused` came from auto-pause (idle), not a manual toggle.
+    pub auto_paused: AtomicBool,
     pub keyboard: KeyboardSimulator,
     pub history: Mutex<VecDeque<HistoryItem>>,
     pub dedup: Mutex<HashSet<String>>,
@@ -43,6 +45,7 @@ impl AppState {
                 config,
                 session_id: Mutex::new(generate_session_id()),
                 paused: AtomicBool::new(false),
+                auto_paused: AtomicBool::new(false),
                 keyboard: KeyboardSimulator::new(),
                 history: Mutex::new(VecDeque::with_capacity(100)),
                 dedup: Mutex::new(HashSet::new()),
@@ -156,8 +159,11 @@ pub fn init_app(app: AppHandle) -> Result<(), String> {
             let idle = inner.last_activity.lock().unwrap().elapsed().as_millis() as u64;
             if idle > timeout && !inner.paused.load(Ordering::SeqCst) {
                 inner.paused.store(true, Ordering::SeqCst);
+                inner.auto_paused.store(true, Ordering::SeqCst);
                 inner.keyboard.release_all();
+                *inner.last_presence.lock().unwrap() = "paused".to_string();
                 let _ = app2.emit("airtype:status", "paused");
+                broadcast_status(&inner, "paused");
             }
         }
     });
@@ -184,6 +190,7 @@ pub fn toggle_pause(app: AppHandle) -> bool {
     if was_paused {
         // resume
         state.inner.paused.store(false, Ordering::SeqCst);
+        state.inner.auto_paused.store(false, Ordering::SeqCst);
         state.inner.keyboard.release_all();
         *state.inner.last_activity.lock().unwrap() = Instant::now();
         *state.inner.last_mobile_at.lock().unwrap() = Instant::now();
@@ -193,6 +200,7 @@ pub fn toggle_pause(app: AppHandle) -> bool {
         return false;
     }
     state.inner.keyboard.release_all();
+    state.inner.auto_paused.store(false, Ordering::SeqCst);
     *state.inner.last_presence.lock().unwrap() = "paused".to_string();
     emit_status(&app, "paused");
     broadcast_status(&state.inner, "paused");
@@ -243,6 +251,7 @@ fn set_presence(inner: &Arc<AppInner>, app: &AppHandle, status: &str) {
     }
     *last = status.to_string();
     drop(last);
+    eprintln!("[airtype] presence: -> {status}");
     emit_status(app, status);
     broadcast_status(inner, status);
 }
@@ -281,14 +290,45 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
 
     // Presence events update pairing status and are not affected by pause.
     match event_type {
-        "client_joined" | "client_heartbeat" => {
+        "client_joined" => {
             *inner.last_mobile_at.lock().unwrap() = Instant::now();
-            if !inner.paused.load(Ordering::SeqCst) {
-                set_presence(inner, app, "connected");
+            *inner.last_activity.lock().unwrap() = Instant::now();
+            // A mobile reconnecting means the user wants to type again: undo an
+            // idle auto-pause, but respect an explicit manual pause.
+            if inner.paused.load(Ordering::SeqCst) {
+                if inner.auto_paused.swap(false, Ordering::SeqCst) {
+                    inner.paused.store(false, Ordering::SeqCst);
+                    inner.keyboard.release_all();
+                } else {
+                    eprintln!("[airtype] presence: client_joined while manually paused -> paused");
+                    broadcast_status(inner, "paused");
+                    return;
+                }
+            }
+            // Always confirm the fresh status to the joining mobile, even if the
+            // desktop presence was already "connected" (stale join confirmation).
+            *inner.last_presence.lock().unwrap() = "connected".to_string();
+            eprintln!("[airtype] presence: client_joined -> connected");
+            emit_status(app, "connected");
+            broadcast_status(inner, "connected");
+            return;
+        }
+        "client_heartbeat" => {
+            *inner.last_mobile_at.lock().unwrap() = Instant::now();
+            if inner.paused.load(Ordering::SeqCst) {
+                return;
+            }
+            let mut last = inner.last_presence.lock().unwrap();
+            if *last != "connected" {
+                *last = "connected".to_string();
+                drop(last);
+                emit_status(app, "connected");
+                broadcast_status(inner, "connected");
             }
             return;
         }
         "client_left" => {
+            eprintln!("[airtype] presence: client_left -> waiting_pairing");
             set_presence(inner, app, "waiting_pairing");
             return;
         }
