@@ -46,4 +46,9 @@ fn main() {
         url, key
     );
     fs::write(out_file, content).expect("failed to write generated_config.rs");
+
+    // Generates the Windows resources + application manifest (Common Controls v6)
+    // required for the app to launch. Must run, otherwise the binary is built
+    // without a manifest and fails with "TaskDialogIndirect entry point not found".
+    tauri_build::build();
 }
