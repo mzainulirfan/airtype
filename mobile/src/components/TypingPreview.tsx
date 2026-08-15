@@ -11,8 +11,21 @@ export default function TypingPreview({ text, cursor, onClear }: TypingPreviewPr
   const caretRef = useRef<HTMLSpanElement>(null)
 
   useEffect(() => {
-    if (caretRef.current) {
-      caretRef.current.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    const body = bodyRef.current
+    const caret = caretRef.current
+    if (!body || !caret) return
+    // Keep the caret visible by scrolling only this preview box, never the
+    // page. scrollIntoView can scroll ancestor containers and hide the box.
+    try {
+      const bodyRect = body.getBoundingClientRect()
+      const caretRect = caret.getBoundingClientRect()
+      if (caretRect.bottom > bodyRect.bottom) {
+        body.scrollTop += caretRect.bottom - bodyRect.bottom + 4
+      } else if (caretRect.top < bodyRect.top) {
+        body.scrollTop -= bodyRect.top - caretRect.top + 4
+      }
+    } catch {
+      /* ignore */
     }
   }, [text, cursor])
 
