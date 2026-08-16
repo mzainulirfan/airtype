@@ -125,6 +125,7 @@ function AppInner() {
     capsLock,
     press,
     release,
+    typeText,
     runChord,
     clearModifiers,
     mouseMove,
@@ -251,7 +252,11 @@ function AppInner() {
           onClear={() => setPreview({ text: '', cursor: 0 })}
         />
       )}
-      <ShortcutsBar onChord={handleChord} favorites={settings.favoriteShortcuts} />
+      <ShortcutsBar
+        onChord={handleChord}
+        onInsertText={typeText}
+        favorites={settings.favoriteShortcuts}
+      />
       <Touchpad
         onMove={mouseMove}
         onButton={mouseButton}

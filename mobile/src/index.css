@@ -314,6 +314,7 @@ body {
   display: flex;
   gap: 6px;
   padding: 0 2px;
+  justify-content: flex-end;
 }
 
 .keyboard-chip {
@@ -551,6 +552,194 @@ body {
   min-width: 88px;
 }
 
+/* ---------- Templates sheet ---------- */
+.paste-btn {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--key-bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.paste-btn:active:not(:disabled) {
+  background: var(--key-bg-special);
+}
+
+.paste-btn:disabled {
+  opacity: 0.6;
+}
+
+.paste-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.paste-manual textarea {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--key-bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.template-row {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  margin-top: 6px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--key-bg);
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.template-row:active {
+  background: var(--key-bg-special);
+}
+
+.template-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.template-preview {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* ---------- Template manager (settings) ---------- */
+.tpl-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.tpl-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--key-bg);
+  padding: 8px 10px;
+}
+
+.tpl-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tpl-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.tpl-preview {
+  font-size: 12px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tpl-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 6px;
+}
+
+.tpl-btn {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--key-bg-special);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.tpl-btn:active {
+  opacity: 0.8;
+}
+
+.tpl-danger {
+  color: #ef4444;
+}
+
+.tpl-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.tpl-add {
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 13px;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.tpl-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--key-bg);
+  padding: 10px;
+}
+
+.tpl-input {
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+}
+
+.tpl-textarea {
+  resize: vertical;
+}
+
+.tpl-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .touchpad {
   flex: 1 1 auto;
   min-height: 90px;
@@ -653,7 +842,7 @@ body {
 }
 
 .key.modifier {
-  background: var(--key-bg-mod);
+  background: var(--key-bg);
   font-size: calc(var(--key-font) - 4px);
 }
 
@@ -689,6 +878,72 @@ body {
 
 .key-shift {
   flex: 1.7;
+}
+
+/* Quick punctuation key: tap types default, long-press opens a picker. */
+.key-punct-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+}
+
+.key-punct-wrap .key {
+  flex: 1;
+}
+
+.key-punct-caret {
+  position: absolute;
+  right: 4px;
+  bottom: 3px;
+  font-size: 8px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.punct-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+}
+
+.punct-popup {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-columns: repeat(4, 38px);
+  gap: 6px;
+  padding: 10px;
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  z-index: 30;
+}
+
+.punct-option {
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--key-bg);
+  color: var(--text);
+  font-size: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.punct-option.active {
+  background: var(--key-active);
+  color: var(--peek-text);
+  border-color: transparent;
+}
+
+.punct-option:active {
+  background: var(--key-bg-special);
 }
 
 /* Key peek (preview above key) */

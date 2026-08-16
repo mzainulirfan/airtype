@@ -8,6 +8,7 @@ import {
 import { getChannelName } from '../lib/supabase'
 import { QUICK_ACTIONS } from '../lib/chords'
 import type { ConnectionStatus } from '../types'
+import TemplateManager from './TemplateManager'
 
 interface SettingsPanelProps {
   onClose: () => void
@@ -230,6 +231,15 @@ export default function SettingsPanel({
                 )
               })}
             </div>
+          </section>
+
+          <section className="settings-section">
+            <h3 className="settings-section-title">Template Teks</h3>
+            <p className="settings-section-hint">
+              Teks berulang yang bisa disisipkan sekali ketuk dari tombol &ldquo;T+&rdquo; di
+              samping baris pintasan.
+            </p>
+            <TemplateManager />
           </section>
 
           <section className="settings-section">

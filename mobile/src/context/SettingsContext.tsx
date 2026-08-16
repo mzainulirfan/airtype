@@ -12,6 +12,12 @@ export type ThemePreference = 'system' | 'light' | 'dark'
 export type KeySize = 'small' | 'default' | 'large'
 export type CursorSensitivity = 1 | 1.5 | 2
 
+export interface TemplateItem {
+  id: string
+  name: string
+  content: string
+}
+
 export interface Settings {
   haptic: boolean
   keySize: KeySize
@@ -22,6 +28,7 @@ export interface Settings {
   showTypingPreview: boolean
   seenGestureGuide: boolean
   favoriteShortcuts: string[]
+  templates: TemplateItem[]
 }
 
 const STORAGE_KEY = 'airtype_settings'
@@ -36,6 +43,7 @@ const DEFAULTS: Settings = {
   showTypingPreview: true,
   seenGestureGuide: false,
   favoriteShortcuts: ['Esc', 'Ctrl+C', 'Ctrl+V', 'Alt+Tab', 'Ctrl+Z'],
+  templates: [],
 }
 
 interface SettingsContextValue {

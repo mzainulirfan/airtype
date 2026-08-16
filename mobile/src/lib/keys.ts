@@ -5,7 +5,7 @@ export type LayerId = 'letters' | 'symbols' | 'extended' | 'fn' | 'nav'
 export interface KeyDefinition {
   code: string
   label: string
-  kind: 'char' | 'modifier' | 'special' | 'layer'
+  kind: 'char' | 'modifier' | 'special' | 'layer' | 'punct'
   shiftLabel?: string
   /** Symbol keys always type their exact label (Android symbols layer). */
   symbol?: boolean
@@ -60,6 +60,13 @@ const specialKey = (code: string, label: string): KeyDefinition => ({
   code,
   label,
   kind: 'special',
+})
+
+/** Quick punctuation key: tap types the default, long-press shows options. */
+const punctKey = (label: string): KeyDefinition => ({
+  code: 'PunctQuick',
+  label,
+  kind: 'punct',
 })
 
 export const MODIFIER_KEYS: Record<string, (active: boolean) => Modifiers> = {
@@ -126,6 +133,7 @@ const LETTERS_ROW_4: KeyRow = {
     modifierKey('AltLeft', 'Alt'),
     modifierKey('MetaLeft', 'Win'),
     specialKey('Space', ' '),
+    punctKey(','),
     specialKey('Enter', '⏎'),
   ],
 }

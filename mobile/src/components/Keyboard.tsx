@@ -2,6 +2,7 @@ import type { KeyDefinition } from '../lib/keys'
 import { getLayer, type LayerId } from '../lib/keys'
 import type { Modifiers } from '../types'
 import KeyButton from './KeyButton'
+import QuickPunctKey from './QuickPunctKey'
 
 interface KeyboardProps {
   modifiers: Modifiers
@@ -93,19 +94,23 @@ export default function Keyboard({
       </div>
       {layerDef.rows.map((row, rowIdx) => (
         <div className="key-row" key={`${layer}-${rowIdx}`}>
-          {row.keys.map((def) => (
-            <KeyButton
-              key={def.code}
-              def={def}
-              shift={shift}
-              caps={capsLock}
-              activeModifier={isModifierActive(def.code, modifiers, capsLock)}
-              haptic={haptic}
-              onPress={handlePress}
-              onRelease={onRelease}
-              onLayerChange={onLayerChange}
-            />
-          ))}
+          {row.keys.map((def) =>
+            def.kind === 'punct' ? (
+              <QuickPunctKey key={def.code} haptic={haptic} onPress={onPress} />
+            ) : (
+              <KeyButton
+                key={def.code}
+                def={def}
+                shift={shift}
+                caps={capsLock}
+                activeModifier={isModifierActive(def.code, modifiers, capsLock)}
+                haptic={haptic}
+                onPress={handlePress}
+                onRelease={onRelease}
+                onLayerChange={onLayerChange}
+              />
+            ),
+          )}
         </div>
       ))}
     </div>

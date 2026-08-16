@@ -300,6 +300,26 @@ export function useKeyboard({
 
   const release = useCallback(() => {}, [])
 
+  /** Insert a full block of text (template / clipboard paste) as a single
+   * type_text to the desktop, after flushing any pending burst typing. */
+  const typeText = useCallback(
+    (text: string) => {
+      if (pausedRef.current) return
+      if (!text) return
+      flushBuffer()
+      sendRef.current({
+        type: 'type_text',
+        sessionId,
+        eventId: nextEventId(),
+        clientId,
+        text,
+        timestamp: new Date().toISOString(),
+      })
+      onEchoRef.current?.({ type: 'insert', text })
+    },
+    [flushBuffer, sessionId, clientId],
+  )
+
   /** Fire a shortcut chord (e.g. Ctrl+A) as a burst of key events without
    * touching the on-screen modifier latch state. All active modifiers are
    * pressed via their snapshot, then released with an empty snapshot at the
@@ -442,6 +462,7 @@ export function useKeyboard({
     capsLock,
     press,
     release,
+    typeText,
     runChord,
     clearModifiers,
     mouseMove,
