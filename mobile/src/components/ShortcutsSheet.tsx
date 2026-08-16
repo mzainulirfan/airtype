@@ -7,7 +7,7 @@ interface ShortcutsSheetProps {
   onClose: () => void
 }
 
-const GROUP_TITLES = ['Papan Klip', 'Pengeditan', 'Jendela & Navigasi']
+const GROUP_TITLES = ['Papan Klip', 'Pengeditan', 'Jendela & Navigasi', 'Sistem']
 
 export default function ShortcutsSheet({ onChord, onClose }: ShortcutsSheetProps) {
   const handlePress = (e: PointerEvent<HTMLButtonElement>, chord: Chord) => {

@@ -22,10 +22,12 @@ const HOLD_STILL_RADIUS = 10
 const SCROLL_THRESHOLD_PX = 18
 const EDGE_X = 60
 const EDGE_Y = 48
-// Cumulative finger travel (actual px) to commit a swipe/nav gesture.
+// Cumulative finger travel (actual px) to commit a swipe gesture.
 const SWIPE_THRESHOLD_PX = 60
 // Finger-distance change to emit one pinch (zoom) notch.
 const PINCH_THRESHOLD_PX = 24
+// Window in which a second 2-finger tap becomes a task-view gesture.
+const DOUBLE_TAP_2F_MS = 300
 
 type EdgeScroll = 'v' | 'h' | null
 type TwoFingerMode = 'none' | 'pinch' | 'pan'
@@ -60,10 +62,9 @@ export default function Touchpad({
   const pinchStartDistRef = useRef(0)
   const panXRef = useRef(0)
   const panYRef = useRef(0)
-  const navAccXRef = useRef(0)
-  const navAccYRef = useRef(0)
   const gestureLockedRef = useRef(false)
   const gestureFiredRef = useRef(false)
+  const last2TapRef = useRef(0)
 
   const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -79,10 +80,9 @@ export default function Touchpad({
       pinchStartDistRef.current = 0
       panXRef.current = 0
       panYRef.current = 0
-      navAccXRef.current = 0
-      navAccYRef.current = 0
       gestureLockedRef.current = false
       gestureFiredRef.current = false
+      last2TapRef.current = 0
       const rect = e.currentTarget.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
@@ -175,69 +175,51 @@ export default function Touchpad({
 
     if (gestureLockedRef.current) return
 
-    // Three fingers: system navigation (task view / show desktop / switch
-    // virtual desktops). Accumulate the average travel of all fingers.
-    if (map.size >= 3) {
-      navAccXRef.current += dx / map.size
-      navAccYRef.current += dy / map.size
-      const ax = Math.abs(navAccXRef.current)
-      const ay = Math.abs(navAccYRef.current)
-      if (Math.max(ax, ay) > SWIPE_THRESHOLD_PX) {
-        gestureLockedRef.current = true
+    // Only two-finger gestures are supported: 3-finger gestures are captured
+    // by the OS on Android/iOS (screenshot/VoiceOver) and never reach the app.
+    if (map.size !== 2) return
+
+    const [a, b] = [...map.values()]
+    if (twoFingerModeRef.current === 'none') {
+      // Fingers moving towards/away from each other => pinch (zoom);
+      // moving in the same direction => pan (scroll / horizontal swipe).
+      const v1x = a.x - a.downX
+      const v1y = a.y - a.downY
+      const v2x = b.x - b.downX
+      const v2y = b.y - b.downY
+      if (v1x !== 0 || v1y !== 0 || v2x !== 0 || v2y !== 0) {
+        twoFingerModeRef.current = v1x * v2x + v1y * v2y < 0 ? 'pinch' : 'pan'
+      }
+    }
+    if (twoFingerModeRef.current === 'pinch') {
+      const cur = Math.hypot(b.x - a.x, b.y - a.y)
+      const change = cur - pinchStartDistRef.current
+      if (Math.abs(change) >= PINCH_THRESHOLD_PX) {
+        pinchStartDistRef.current = cur
         gestureFiredRef.current = true
-        if (ay > ax) {
-          onGesture?.(navAccYRef.current < 0 ? 'task_view' : 'show_desktop')
-        } else {
-          onGesture?.(navAccXRef.current < 0 ? 'desktop_prev' : 'desktop_next')
-        }
+        onGesture?.(change > 0 ? 'zoom_in' : 'zoom_out')
       }
       return
     }
 
-    if (map.size === 2) {
-      const [a, b] = [...map.values()]
-      if (twoFingerModeRef.current === 'none') {
-        // Fingers moving towards/away from each other => pinch (zoom);
-        // moving in the same direction => pan (scroll / horizontal swipe).
-        const v1x = a.x - a.downX
-        const v1y = a.y - a.downY
-        const v2x = b.x - b.downX
-        const v2y = b.y - b.downY
-        if (v1x !== 0 || v1y !== 0 || v2x !== 0 || v2y !== 0) {
-          twoFingerModeRef.current = v1x * v2x + v1y * v2y < 0 ? 'pinch' : 'pan'
-        }
-      }
-      if (twoFingerModeRef.current === 'pinch') {
-        const cur = Math.hypot(b.x - a.x, b.y - a.y)
-        const change = cur - pinchStartDistRef.current
-        if (Math.abs(change) >= PINCH_THRESHOLD_PX) {
-          pinchStartDistRef.current = cur
-          gestureFiredRef.current = true
-          onGesture?.(change > 0 ? 'zoom_in' : 'zoom_out')
-        }
-        return
-      }
-
-      // Pan: keep the dominant axis. Vertical = scroll; horizontal past the
-      // swipe threshold = browser back/forward.
-      panXRef.current += dx / 2
-      panYRef.current += dy / 2
-      const ax = Math.abs(panXRef.current)
-      const ay = Math.abs(panYRef.current)
-      if (ay > ax) {
-        panXRef.current = 0
-        emitScroll(0, dy)
+    // Pan: keep the dominant axis. Vertical = scroll; horizontal past the
+    // swipe threshold = browser back/forward.
+    panXRef.current += dx / 2
+    panYRef.current += dy / 2
+    const ax = Math.abs(panXRef.current)
+    const ay = Math.abs(panYRef.current)
+    if (ay > ax) {
+      panXRef.current = 0
+      emitScroll(0, dy)
+    } else {
+      panYRef.current = 0
+      if (ax > SWIPE_THRESHOLD_PX) {
+        gestureLockedRef.current = true
+        gestureFiredRef.current = true
+        onGesture?.(panXRef.current > 0 ? 'forward' : 'back')
       } else {
-        panYRef.current = 0
-        if (ax > SWIPE_THRESHOLD_PX) {
-          gestureLockedRef.current = true
-          gestureFiredRef.current = true
-          onGesture?.(panXRef.current > 0 ? 'forward' : 'back')
-        } else {
-          emitScroll(dx, 0)
-        }
+        emitScroll(dx, 0)
       }
-      return
     }
   }
 
@@ -255,12 +237,17 @@ export default function Touchpad({
       onButton('up', 'left')
     } else if (!gestureFiredRef.current && dur < TAP_MAX_MS && dist < TAP_MAX_DIST) {
       const fingers = maxFingersRef.current
-      if (fingers >= 3) {
-        onButton('down', 'middle')
-        onButton('up', 'middle')
-      } else if (fingers >= 2) {
-        onButton('down', 'right')
-        onButton('up', 'right')
+      if (fingers >= 2) {
+        // Two quick 2-finger taps = task view; a single one = right click.
+        const now = Date.now()
+        if (now - last2TapRef.current < DOUBLE_TAP_2F_MS) {
+          last2TapRef.current = 0
+          onGesture?.('task_view')
+        } else {
+          last2TapRef.current = now
+          onButton('down', 'right')
+          onButton('up', 'right')
+        }
       } else {
         onButton('down', 'left')
         onButton('up', 'left')
@@ -300,7 +287,7 @@ export default function Touchpad({
       onContextMenu={(e) => e.preventDefault()}
     >
       <span className="touchpad-hint">
-        1 jari: cursor · 2 jari: scroll · 3 jari: task view
+        1 jari: cursor · 2 jari: scroll · cubit: zoom
       </span>
       {onHelp && (
         <button

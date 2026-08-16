@@ -194,15 +194,10 @@ function AppInner() {
 
   const handleGesture = useCallback(
     (gesture: GestureName) => {
-      if (gesture === 'middle_click') {
-        mouseButton('down', 'middle')
-        mouseButton('up', 'middle')
-        return
-      }
       const chord = GESTURE_CHORDS[gesture]
       if (chord) handleChord(chord)
     },
-    [handleChord, mouseButton],
+    [handleChord],
   )
 
   useWakeLock(Boolean(sessionId) && !paused)

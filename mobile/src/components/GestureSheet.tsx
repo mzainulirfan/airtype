@@ -13,11 +13,7 @@ const BASIC_GESTURES: { gesture: string; action: string }[] = [
 const MULTI_GESTURES: { gesture: string; action: string }[] = [
   { gesture: '2 jari geser kiri', action: 'Kembali (Alt+←)' },
   { gesture: '2 jari geser kanan', action: 'Maju (Alt+→)' },
-  { gesture: '3 jari ketuk', action: 'Klik tengah' },
-  { gesture: '3 jari geser ke atas', action: 'Task view (Win+Tab)' },
-  { gesture: '3 jari geser ke bawah', action: 'Tampilkan desktop (Win+D)' },
-  { gesture: '3 jari geser kiri', action: 'Desktop sebelumnya' },
-  { gesture: '3 jari geser kanan', action: 'Desktop berikutnya' },
+  { gesture: '2 jari ketuk 2× cepat', action: 'Task view (Win+Tab)' },
   { gesture: 'Cubit keluar', action: 'Perbesar (Ctrl++)' },
   { gesture: 'Cubit masuk', action: 'Perkecil (Ctrl+-)' },
 ]
@@ -53,6 +49,11 @@ export default function GestureSheet({ onClose }: GestureSheetProps) {
           <section className="sheet-group">
             <h3>Multi-jari</h3>
             <GestureList items={MULTI_GESTURES} />
+            <p className="settings-section-hint">
+              Gesture 3 jari tidak dipakai karena diambil alih sistem HP
+              (Android/iOS) — gunakan ketuk 2× cepat atau pintasan di lembar
+              Pintasan.
+            </p>
           </section>
         </div>
       </div>
