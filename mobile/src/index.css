@@ -897,6 +897,23 @@ button.secondary:disabled {
   background: rgba(239, 68, 68, 0.12);
 }
 
+.reconnect-btn {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--accent, var(--primary));
+  color: var(--on-accent, #fff);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.reconnect-btn:active {
+  opacity: 0.8;
+}
+
 .settings-section-hint {
   font-size: 12px;
   color: var(--text-dim);

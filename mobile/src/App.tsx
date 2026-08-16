@@ -100,17 +100,19 @@ function AppInner() {
     'waiting_pairing' | 'connected' | 'paused' | null
   >(null)
   const [deviceName, setDeviceName] = useState<string | undefined>(undefined)
+  const [lastSeenAt, setLastSeenAt] = useState<number | null>(null)
 
   const client = useMemo(() => createSupabaseClient(), [])
 
   const handleMessage = useCallback((event: BroadcastPayload) => {
     if (event.type === 'desktop_status') {
       setDesktopStatus(event.status)
+      setLastSeenAt(Date.now())
       if (event.deviceName) setDeviceName(event.deviceName)
     }
   }, [])
 
-  const { status, send } = useRealtime(client, sessionId, CLIENT_ID, handleMessage)
+  const { status, send, reconnect } = useRealtime(client, sessionId, CLIENT_ID, handleMessage)
 
   const applyEcho = useCallback((token: EchoToken) => {
     setPreview((prev) => applyPreviewToken(prev, token))
@@ -259,6 +261,8 @@ function AppInner() {
           desktopStatus={desktopStatus}
           paused={paused}
           deviceName={deviceName}
+          lastSeenAt={lastSeenAt}
+          onReconnect={reconnect}
           onDisconnect={handleDisconnect}
         />
       )}

@@ -15,6 +15,10 @@ use crate::types::{HistoryItem, KeyEventPayload, MouseEventPayload, SessionInfo,
 
 /// If the mobile goes silent for this long, fall back to waiting_pairing.
 const MOBILE_PRESENCE_TIMEOUT_SECS: u64 = 60;
+/// Broadcast the current presence this often so mobile clients can tell the
+/// link is still end-to-end alive (channel subscription alone is not a
+/// liveness signal on either side).
+const STATUS_BROADCAST_INTERVAL_SECS: u64 = 10;
 
 pub struct AppState {
     pub inner: Arc<AppInner>,
@@ -38,6 +42,7 @@ pub struct AppInner {
     pub last_activity: Mutex<Instant>,
     pub last_mobile_at: Mutex<Instant>,
     pub last_presence: Mutex<String>,
+    pub last_status_sent: Mutex<Instant>,
     pub init_started: AtomicBool,
 }
 
@@ -61,6 +66,7 @@ impl AppState {
                 last_activity: Mutex::new(Instant::now()),
                 last_mobile_at: Mutex::new(Instant::now()),
                 last_presence: Mutex::new(String::new()),
+                last_status_sent: Mutex::new(Instant::now()),
                 init_started: AtomicBool::new(false),
             }),
         }
@@ -163,6 +169,28 @@ pub fn init_app(app: AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn(async move {
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
+
+            // Periodic liveness broadcast: mobile clients treat an inbound
+            // desktop_status as "the link is still alive" even when the state
+            // never changes. Broadcast the current presence every interval so
+            // a silently dead half-open connection surfaces on the phone.
+            {
+                let mut last = inner
+                    .last_status_sent
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner());
+                if last.elapsed() >= Duration::from_secs(STATUS_BROADCAST_INTERVAL_SECS) {
+                    *last = Instant::now();
+                    let status = inner
+                        .last_presence
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .clone();
+                    if !status.is_empty() {
+                        broadcast_status(&inner, &status);
+                    }
+                }
+            }
 
             // Presence watchdog: if the mobile has been silent for too long,
             // fall back to waiting_pairing (handles mobile dying without client_left).

@@ -14,6 +14,12 @@ const STUCK_AFTER_MS = 30000
 // If the tab was hidden at least this long, the socket is likely stale/dead
 // (browser suspends JS timers while backgrounded), so force a fresh subscribe.
 const HIDDEN_RESUBSCRIBE_MS = 15000
+// If we are "connected" (channel SUBSCRIBED) but have not heard a single
+// desktop_status broadcast for this long, the socket is half-open and the
+// link is dead even though nothing reports an error. Force a fresh subscribe.
+// The desktop broadcasts desktop_status every ~10s, so this is several missed
+// broadcasts of slack.
+const DESKTOP_STALE_AFTER_MS = 40000
 
 let presenceCounter = 0
 
@@ -36,6 +42,8 @@ export function useRealtime(
   const stuckSinceRef = useRef(0)
   const activeRef = useRef<string | null>(null)
   const hiddenSinceRef = useRef(0)
+  const lastDesktopAtRef = useRef(0)
+  const reconnectRef = useRef<() => void>(() => {})
 
   onMessageRef.current = onMessage
 
@@ -96,7 +104,11 @@ export function useRealtime(
           config: { broadcast: { self: false } },
         })
         .on('broadcast', { event: 'airtype' }, ({ payload }) => {
-          onMessageRef.current(payload as BroadcastPayload)
+          const p = payload as BroadcastPayload
+          // The desktop broadcasts its status periodically; treat any inbound
+          // desktop_status as proof the link is still alive end-to-end.
+          if (p.type === 'desktop_status') lastDesktopAtRef.current = Date.now()
+          onMessageRef.current(p)
         })
         .subscribe(subscribeCb)
       channelRef.current = channel
@@ -123,6 +135,7 @@ export function useRealtime(
       setBoth('connecting')
       setupChannel()
     }
+    reconnectRef.current = hardReconnect
 
     const rehandshake = () => {
       if (!channelRef.current || statusRef.current !== 'connected') {
@@ -171,6 +184,14 @@ export function useRealtime(
       if (activeRef.current !== channelName) return
       if (statusRef.current === 'connected') {
         stuckSinceRef.current = 0
+        // End-to-end liveness: a healthy link has a desktop_status arriving
+        // every ~10s. If none has arrived while the channel still reports
+        // SUBSCRIBED, the socket is half-open: commands are silently lost but
+        // nothing raises an error. Surface it and force a fresh subscribe.
+        if (Date.now() - lastDesktopAtRef.current > DESKTOP_STALE_AFTER_MS) {
+          setBoth('reconnecting')
+          hardReconnect()
+        }
         return
       }
       if (stuckSinceRef.current === 0) {
@@ -185,6 +206,7 @@ export function useRealtime(
 
     return () => {
       activeRef.current = null
+      reconnectRef.current = () => {}
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
@@ -216,5 +238,9 @@ export function useRealtime(
     [client, sessionId, setBoth],
   )
 
-  return { status, send }
+  const reconnect = useCallback(() => {
+    reconnectRef.current()
+  }, [])
+
+  return { status, send, reconnect }
 }

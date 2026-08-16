@@ -16,6 +16,8 @@ interface SettingsPanelProps {
   desktopStatus: 'waiting_pairing' | 'connected' | 'paused' | null
   paused: boolean
   deviceName?: string
+  lastSeenAt?: number | null
+  onReconnect: () => void
   onDisconnect: () => void
 }
 
@@ -91,6 +93,15 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+function timeAgo(ts: number | null | undefined): string {
+  if (!ts) return 'Belum ada'
+  const s = Math.max(0, Math.round((Date.now() - ts) / 1000))
+  if (s < 60) return `${s} detik lalu`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m} menit lalu`
+  return new Date(ts).toLocaleTimeString()
+}
+
 export default function SettingsPanel({
   onClose,
   sessionId,
@@ -98,6 +109,8 @@ export default function SettingsPanel({
   desktopStatus,
   paused,
   deviceName,
+  lastSeenAt,
+  onReconnect,
   onDisconnect,
 }: SettingsPanelProps) {
   const { settings, update } = useSettings()
@@ -123,7 +136,16 @@ export default function SettingsPanel({
             <h3 className="settings-section-title">Info Koneksi</h3>
             <InfoRow label="Perangkat" value={deviceName ?? 'Perangkat tidak dikenal'} />
             <InfoRow label="Status" value={statusText} />
+            <InfoRow label="Terakhir menerima data" value={timeAgo(lastSeenAt)} />
             <InfoRow label="ID Sesi" value={getChannelName(sessionId)} />
+            <div className="settings-section-hint" style={{ marginTop: 6 }}>
+              Jika status "Terhubung" tetapi tidak ada respons dari PC (koneksi
+              bisa "macet" diam-diam), tekan tombol di bawah untuk menyambung
+              ulang. Aplikasi juga otomatis mendeteksi masalah ini.
+            </div>
+            <button type="button" className="reconnect-btn" onClick={onReconnect}>
+              Sambungkan ulang
+            </button>
           </section>
 
           <section className="settings-section">
