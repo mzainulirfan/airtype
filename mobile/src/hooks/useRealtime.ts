@@ -11,6 +11,9 @@ export interface RealtimeOptions {
 const PRESENCE_HEARTBEAT_MS = 15000
 const RECONNECT_CHECK_MS = 15000
 const STUCK_AFTER_MS = 30000
+// If the tab was hidden at least this long, the socket is likely stale/dead
+// (browser suspends JS timers while backgrounded), so force a fresh subscribe.
+const HIDDEN_RESUBSCRIBE_MS = 15000
 
 let presenceCounter = 0
 
@@ -32,6 +35,7 @@ export function useRealtime(
   const presenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const stuckSinceRef = useRef(0)
   const activeRef = useRef<string | null>(null)
+  const hiddenSinceRef = useRef(0)
 
   onMessageRef.current = onMessage
 
@@ -129,12 +133,21 @@ export function useRealtime(
     }
 
     // Returning to the foreground: re-handshake with the desktop right away
-    // (it may have flipped to waiting_pairing while we were backgrounded),
-    // or hard-reconnect if we lost the link while away.
+    // (it may have flipped to waiting_pairing while we were backgrounded).
+    // If the tab was hidden for a while, the old socket is likely stale/dead
+    // and a light rehandshake would be silently lost; force a fresh subscribe
+    // so the desktop receives a real client_joined and resumes.
     const onVisibility = () => {
-      if (document.visibilityState !== 'visible') return
       if (activeRef.current !== channelName) return
-      rehandshake()
+      if (document.visibilityState === 'hidden') {
+        hiddenSinceRef.current = Date.now()
+        return
+      }
+      if (Date.now() - hiddenSinceRef.current >= HIDDEN_RESUBSCRIBE_MS) {
+        hardReconnect()
+      } else {
+        rehandshake()
+      }
     }
     document.addEventListener('visibilitychange', onVisibility)
 
