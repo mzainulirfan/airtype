@@ -106,64 +106,98 @@ body {
   grid-area: keyboard;
 }
 
-/* ---------- Landscape: two-pane (touchpad left, keyboard right) ----------
-   Height is scarce in landscape, so the touchpad gets the full left column
-   and the keyboard lives on the right, scaled down to fit. Touchpad logic is
-   delta-based, so only the box shape/size changes. */
+/* ---------- Landscape: full-screen keyboard OR full-screen touchpad --------
+   A mode toggle (only visible in landscape) switches between the two. Height
+   is scarce in landscape, so instead of a split touchpad+keyboard each mode
+   takes the whole screen. */
 @media (orientation: landscape) {
   .app {
+    grid-template-columns: 1fr;
+  }
+
+  /* Keyboard mode: status bar + full-width keyboard. */
+  .app.landscape-keyboard {
     grid-template-areas:
-      'status typing'
-      'shortcuts keyboard'
-      'touchpad keyboard';
+      'status'
+      'keyboard';
+    grid-template-rows: auto 1fr;
+  }
+  .app.landscape-keyboard .touchpad,
+  .app.landscape-keyboard .shortcuts-bar,
+  .app.landscape-keyboard .typing-preview {
+    display: none;
+  }
+
+  /* Touchpad mode: status bar + shortcuts + full-height touchpad. */
+  .app.landscape-touchpad {
+    grid-template-areas:
+      'status'
+      'shortcuts'
+      'touchpad';
     grid-template-rows: auto auto 1fr;
-    grid-template-columns: 1fr 1fr;
+  }
+  .app.landscape-touchpad .keyboard-wrap,
+  .app.landscape-touchpad .typing-preview {
+    display: none;
   }
 
   .status-bar {
     padding: 6px 12px;
   }
 
-  /* Slim typing preview sitting above the keyboard on the right. */
-  .typing-preview {
-    margin: 0 8px 6px 0;
-    align-self: start;
-  }
-
-  .typing-preview-body {
-    max-height: 52px;
-    min-height: 26px;
-    padding: 3px 10px;
-    font-size: 13px;
-  }
-
   .shortcuts-bar {
     padding: 0 10px 6px;
   }
 
-  /* Keep the touchpad tall enough for 2-finger gestures. */
   .touchpad {
     min-height: 120px;
   }
 
-  /* Scale the keyboard down so it fits the shorter viewport. */
-  .keyboard-wrap {
-    --key-height: clamp(30px, 9dvh, 40px);
-    --key-font: clamp(12px, 2.6dvh, 15px);
-    padding: 6px 8px 8px;
+  /* Full-screen keyboard: bigger keys that fill the available height. */
+  .app.landscape-keyboard .keyboard-wrap {
+    --key-height: clamp(38px, 11dvh, 52px);
+    --key-font: clamp(14px, 3dvh, 18px);
+    padding: 8px;
+    justify-content: center;
   }
 
   .keyboard {
-    gap: 5px;
+    gap: 6px;
   }
 
   .key-row {
-    gap: 5px;
+    gap: 6px;
   }
 
   .keyboard.nav .key {
     height: calc(var(--key-height) * 1.2);
     font-size: calc(var(--key-font) + 4px);
+  }
+}
+
+/* Mode toggle: only shown in landscape. */
+.mode-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--key-bg);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mode-toggle:active {
+  background: var(--key-bg-special);
+}
+
+@media (orientation: landscape) {
+  .mode-toggle {
+    display: inline-flex;
   }
 }
 

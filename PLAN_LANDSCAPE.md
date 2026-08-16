@@ -34,69 +34,62 @@ dengan layout vertikal saat ini:
 
 ### Prinsip desain untuk landscape
 
-1. **Dua panel (side-by-side)**, pola seperti laptop/trackpad remote:
-   - Kiri: StatusBar (slim) + ShortcutsBar + **Touchpad** (tinggi penuh).
-   - Kanan: TypingPreview (jika aktif) + **Keyboard** (tinggi penuh).
-2. **Tinggi adalah sumber daya langka**: semua chrome vertikal harus
-   dipangkas; keyboard memakai tombol yang lebih pendek via `clamp()`.
-3. **Tanpa mengunci orientasi**: biarkan PWA mengikuti rotasi perangkat dan
-   switch layout via CSS media query (`orientation: landscape`).
+1. **Satu mode dalam satu layar** (hasil iterasi pengguna): alih-alih dua panel
+   touchpad+keyboard yang terasa sempit, landscape punya **dua mode penuh**:
+   - **Mode Keyboard** — keyboard full-screen seperti keyboard asli.
+   - **Mode Mouse (touchpad)** — touchpad full-screen.
+2. **Tombol ganti mode** (Keyboard ↔ Mouse) hanya muncul di **landscape**.
+3. **Tanpa mengunci orientasi**: PWA mengikuti rotasi, switch layout via CSS
+   media query (`orientation: landscape`) + class mode di `.app`.
 4. **Tanpa mengubah logika Touchpad**: delta-based, cukup atur ukuran/posisi.
 
-## 3. Rencana Implementasi
+## 3. Rencana Implementasi (terbaru)
 
-### Fase 1 — Layout dua panel (CSS murni, `mobile/src/index.css`)
-- Tambah media query `@media (orientation: landscape)`:
-  - `.app` → `flex-direction: row` (atau `grid` dua kolom).
-  - Kolom kiri (StatusBar + ShortcutsBar + Touchpad) = `flex: 1 1 50%`,
-    `flex-direction: column`.
-  - Kolom kanan (TypingPreview + `keyboard-wrap`) = `flex: 1 1 50%`,
-    `flex-direction: column`, `justify-content: flex-end`.
-  - Touchpad: `min-height: 120px` (cukup untuk gesture vertikal), hapus
-    margin bawah, tetap `flex: 1`.
-- Wrapping div baru (atau class) di `App.tsx` agar StatusBar/Touchpad berada
-  di kolom kiri dan keyboard di kolom kanan — **restrukturisasi ringan JSX**,
-  tanpa mengubah komponen keyboard/touchpad itu sendiri.
-- Safe-area: gunakan `env(safe-area-inset-left/right)` untuk notch di sisi.
+### Fase 1 — Layout grid + mode full-screen (dilakukan)
+- `.app` diubah jadi **CSS grid** dengan `grid-template-areas`; urutan portrait
+  tidak berubah (`status / typing / shortcuts / touchpad / keyboard`).
+- Landscape memakai class mode:
+  - `.app.landscape-keyboard` → area `status` + `keyboard` (keyboard full),
+    elemen lain (`touchpad`, `shortcuts-bar`, `typing-preview`) di-hide.
+  - `.app.landscape-touchpad` → area `status` + `shortcuts` + `touchpad`,
+    keyboard & typing-preview di-hide.
+- **Tombol mode** di StatusBar (`.mode-toggle`), `display:none` di portrait,
+    muncul di landscape; label berisi mode tujuan (Mouse/Keyboard).
 
-### Fase 2 — Skala keyboard & chrome kompak
-- Di landscape, set ulang variabel ukuran:
-  - `--key-height: clamp(30px, 9dvh, 42px)` dan `--key-font` mengecil
-    (`clamp(12px, 2.5dvh, 15px)`), gap antar baris dipangkas.
-- TypingPreview: di landscape tampil sebagai bar tipis di atas keyboard
-  kolom kanan (bukan selebar layar), tetap collapsible.
-- Toolbar keyboard: label chip bisa dipersingkat di landscape bila sempit.
+### Fase 2 — Skala keyboard & chrome kompak (dilakukan)
+- Mode keyboard: `--key-height: clamp(38px, 11dvh, 52px)` dan `--key-font`
+  mengecil sesuai `dvh`, keyboard di-centre agar seperti keyboard asli.
+- Mode touchpad: touchpad `min-height: 120px`, shortcut bar tetap di atas.
+- TypingPreview disembunyikan di landscape (agar layar penuh).
 
-### Fase 3 — Polesan & pengaturan opsional
+### Fase 3 — Polesan & pengaturan opsional (belum)
 - Tambah **pengaturan "Kunci orientasi"** (opsional): `portrait` / `landscape`
-  / `auto`, diterapkan via CSS `html[data-orientation='...']` + meta tag
-  pengunci jika perlu (via `screen.orientation.lock()` saat supported).
-- Validasi touchpad: pastikan area masih cukup untuk pan/scroll 2 jari dan
-  pinch (pinch butuh ruang ~ lebih dari threshold 24px) di tinggi minimal.
-- ShortcutsBar di landscape: bisa pindah ke atas kolom kiri agar tidak
-  menyita tinggi touchpad.
+  / `auto`, diterapkan via `html[data-orientation='...']` + meta tag pengunci
+  jika perlu (via `screen.orientation.lock()` saat supported).
+- Validasi gesture touchpad (pan/scroll 2 jari, pinch) di kedua mode.
+- Cek safe-area (notch) di kedua orientasi.
 
 ## 4. Verifikasi
 
 - Build + lint: `npm run lint` dan `npm run build` (mobile).
 - Manual di perangkat (atau DevTools device emulation):
-  1. Putar ke landscape → dua panel tampil, touchpad dan keyboard keduanya
-     berfungsi.
-  2. Gesture: scroll 2 jari, geser 2 jari (kembali/maju), cubit zoom.
-  3. TypingPreview & ShortcutsBar tampil wajar.
-  4. Kembali ke portrait → layout kembali seperti sebelumnya.
+  1. Putar ke landscape → mode Keyboard full-screen tampil.
+  2. Tombol ganti mode muncul; tap → mode Mouse (touchpad full), tap lagi →
+     kembali Keyboard.
+  3. Gesture di mode Mouse: scroll 2 jari, geser 2 jari (kembali/maju), cubit
+     zoom.
+  4. Kembali ke portrait → layout portrait normal (tombol mode tersembunyi).
   5. Cek safe-area (notch) di kedua orientasi.
 
 ## 5. Risiko & Catatan
 
-- **Bukan split-keyboard thumb** seperti keyboard HP: aplikasi ini adalah
-  remote trackpad+kboard, jadi dua panel (touchpad kiri, keyboard kanan)
-  adalah tujuannya, bukan keyboard terbelah.
+- **Bukan split-keyboard thumb** seperti keyboard HP: mode keyboard adalah
+  keyboard penuh satu kolom (bukan terbelah).
 - **Browser UI landscape**: pada iOS/Android `100dvh` mengikuti area aplikasi;
   perlu dicek di perangkat nyata (browser biasa vs PWA standalone).
 - **QR scanner / ConnectScreen** di landscape: kamera bekerja normal, hanya
   perlu memastikan tata letaknya tetap terpusat (minor).
 - Jika muncul kesulitan layout yang rumit, fallback-nya: kunci ke portrait
   via manifest (`orientation: 'portrait'`) + layar pemberitahuan "putar ke
-  portrait" — tetapi **rekomendasi utama adalah mendukung landscape dua
-  panel** karena landscape sangat umum saat mengetik dengan dua tangan.
+  portrait" — tetapi **rekomendasi utama adalah mendukung landscape dua mode
+  penuh** karena landscape sangat umum saat mengetik dengan dua tangan.

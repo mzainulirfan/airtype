@@ -1,10 +1,14 @@
 import type { ConnectionStatus } from '../types'
 
+export type LandscapeMode = 'touchpad' | 'keyboard'
+
 interface StatusBarProps {
   status: ConnectionStatus
   paused: boolean
   desktopStatus: 'waiting_pairing' | 'connected' | 'paused' | null
   deviceName?: string
+  mode?: LandscapeMode
+  onToggleMode?: () => void
   onTogglePause: (paused: boolean) => void
   onOpenSettings: () => void
 }
@@ -27,6 +31,8 @@ export default function StatusBar({
   paused,
   desktopStatus,
   deviceName,
+  mode,
+  onToggleMode,
   onTogglePause,
   onOpenSettings,
 }: StatusBarProps) {
@@ -41,6 +47,11 @@ export default function StatusBar({
       </span>
       {desktopStatus && !paused && (
         <span className="desktop-status">{DESKTOP_LABEL[desktopStatus]}</span>
+      )}
+      {mode && onToggleMode && (
+        <button type="button" className="mode-toggle" onClick={onToggleMode}>
+          {mode === 'keyboard' ? 'Mouse' : 'Keyboard'}
+        </button>
       )}
       <button type="button" className="icon-btn" onClick={onOpenSettings} aria-label="Pengaturan">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8">

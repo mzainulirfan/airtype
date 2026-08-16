@@ -5,7 +5,7 @@ import InstallPrompt from './components/InstallPrompt'
 import Keyboard from './components/Keyboard'
 import SettingsPanel from './components/SettingsPanel'
 import ShortcutsBar from './components/ShortcutsBar'
-import StatusBar from './components/StatusBar'
+import StatusBar, { type LandscapeMode } from './components/StatusBar'
 import Touchpad from './components/Touchpad'
 import TypingPreview from './components/TypingPreview'
 import { SettingsProvider, useSettings } from './context/SettingsContext'
@@ -96,6 +96,7 @@ function AppInner() {
   const [keyboardLayer, setKeyboardLayer] = useState<LayerId>('letters')
   const [preview, setPreview] = useState<PreviewState>({ text: '', cursor: 0 })
   const [showGestureGuide, setShowGestureGuide] = useState(false)
+  const [landscapeMode, setLandscapeMode] = useState<LandscapeMode>('keyboard')
   const [desktopStatus, setDesktopStatus] = useState<
     'waiting_pairing' | 'connected' | 'paused' | null
   >(null)
@@ -230,12 +231,16 @@ function AppInner() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${landscapeMode === 'keyboard' ? 'landscape-keyboard' : 'landscape-touchpad'}`}>
       <StatusBar
         status={status}
         paused={paused}
         desktopStatus={desktopStatus}
         deviceName={deviceName}
+        mode={landscapeMode}
+        onToggleMode={() =>
+          setLandscapeMode((m) => (m === 'keyboard' ? 'touchpad' : 'keyboard'))
+        }
         onTogglePause={handleTogglePause}
         onOpenSettings={() => setShowSettings(true)}
       />
