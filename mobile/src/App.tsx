@@ -175,12 +175,28 @@ function AppInner() {
     setSessionId(null)
   }, [])
 
-  const handleTogglePause = useCallback(() => {
-    setPaused((p) => {
-      if (p) clearModifiers()
-      return !p
-    })
-  }, [clearModifiers])
+  const handleTogglePause = useCallback(
+    // The pause state lives on the desktop; the phone only relays the user's
+    // intent. The desktop broadcasts the new desktop_status back.
+    (target: boolean) => {
+      if (!target) clearModifiers()
+      send({
+        type: 'client_pause',
+        sessionId: sessionId ?? '',
+        clientId: CLIENT_ID,
+        eventId: `pause-${Date.now().toString(36)}`,
+        paused: target,
+        timestamp: new Date().toISOString(),
+      })
+    },
+    [clearModifiers, send, sessionId],
+  )
+
+  // Mirror the desktop's paused state so the phone's button matches reality
+  // and the phone stops sending keystrokes while the desktop is paused.
+  useEffect(() => {
+    setPaused(desktopStatus === 'paused')
+  }, [desktopStatus])
 
   const handleChord = useCallback(
     (chord: Chord) => {

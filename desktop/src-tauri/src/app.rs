@@ -235,25 +235,33 @@ pub fn new_session(app: AppHandle) -> Result<SessionInfo, String> {
 #[tauri::command]
 pub fn toggle_pause(app: AppHandle) -> bool {
     let state = app.state::<AppState>();
-    let was_paused = state.inner.paused.swap(true, Ordering::SeqCst);
-    if was_paused {
-        // resume
-        state.inner.paused.store(false, Ordering::SeqCst);
-        state.inner.auto_paused.store(false, Ordering::SeqCst);
-        state.inner.keyboard.release_all();
-        *state.inner.last_activity.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
-        *state.inner.last_mobile_at.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
-        *state.inner.last_presence.lock().unwrap_or_else(|e| e.into_inner()) = "connected".to_string();
-        emit_status(&app, "connected");
-        broadcast_status(&state.inner, "connected");
-        return false;
+    let next = !state.inner.paused.load(Ordering::SeqCst);
+    set_paused(&state.inner, &app, next);
+    next
+}
+
+/// Apply an explicit pause/resume (from the mobile or the desktop UI). The
+/// pause state is owned by the desktop, so both ends always agree on it.
+/// Resets the auto-pause flag so a reconnect never silently un-pauses an
+/// explicitly paused desktop.
+fn set_paused(inner: &Arc<AppInner>, app: &AppHandle, paused: bool) {
+    let prev = inner.paused.swap(paused, Ordering::SeqCst);
+    if prev == paused {
+        return;
     }
-    state.inner.keyboard.release_all();
-    state.inner.auto_paused.store(false, Ordering::SeqCst);
-    *state.inner.last_presence.lock().unwrap_or_else(|e| e.into_inner()) = "paused".to_string();
-    emit_status(&app, "paused");
-    broadcast_status(&state.inner, "paused");
-    true
+    inner.auto_paused.store(false, Ordering::SeqCst);
+    inner.keyboard.release_all();
+    *inner.last_presence.lock().unwrap_or_else(|e| e.into_inner()) =
+        if paused { "paused".to_string() } else { "connected".to_string() };
+    if paused {
+        emit_status(app, "paused");
+        broadcast_status(inner, "paused");
+    } else {
+        *inner.last_activity.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
+        *inner.last_mobile_at.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
+        emit_status(app, "connected");
+        broadcast_status(inner, "connected");
+    }
 }
 
 #[tauri::command]
@@ -426,6 +434,11 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
             return;
         }
         "desktop_status" => return,
+        "client_pause" => {
+            let paused = value.get("paused").and_then(Value::as_bool).unwrap_or(true);
+            set_paused(inner, app, paused);
+            return;
+        }
         _ => {}
     }
 

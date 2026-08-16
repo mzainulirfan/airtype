@@ -50,6 +50,7 @@ export type BroadcastPayload =
   | MouseEventPayload
   | DesktopStatusPayload
   | PresencePayload
+  | ClientPausePayload
 
 /** Local echo of what would appear on the PC, for the on-screen preview. */
 export type EchoToken =
@@ -90,6 +91,16 @@ export interface PresencePayload {
   eventId: string
   sessionId: string
   clientId: string
+  timestamp: string
+}
+
+/** Mobile asking the desktop to pause/resume (pauses are desktop-owned). */
+export interface ClientPausePayload {
+  type: 'client_pause'
+  eventId: string
+  sessionId: string
+  clientId: string
+  paused: boolean
   timestamp: string
 }
 
