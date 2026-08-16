@@ -66,6 +66,31 @@ export default function Keyboard({
 
   return (
     <div className={layer === 'nav' ? 'keyboard nav' : 'keyboard'}>
+      <div className="keyboard-toolbar">
+        <button
+          type="button"
+          className={layer === 'letters' || layer === 'nav' ? 'keyboard-chip active' : 'keyboard-chip'}
+          onClick={() => onLayerChange('letters')}
+        >
+          ABC
+        </button>
+        <button
+          type="button"
+          className={
+            layer === 'symbols' || layer === 'extended' ? 'keyboard-chip active' : 'keyboard-chip'
+          }
+          onClick={() => onLayerChange('symbols')}
+        >
+          ?123
+        </button>
+        <button
+          type="button"
+          className={layer === 'fn' ? 'keyboard-chip active' : 'keyboard-chip'}
+          onClick={() => onLayerChange('fn')}
+        >
+          PC
+        </button>
+      </div>
       {layerDef.rows.map((row, rowIdx) => (
         <div className="key-row" key={`${layer}-${rowIdx}`}>
           {row.keys.map((def) => (

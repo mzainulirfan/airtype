@@ -8,6 +8,8 @@ interface TouchpadProps {
   onScroll: (delta: number, axis: 'vertical' | 'horizontal') => void
   /** Cursor sensitivity multiplier (also scales scroll speed). */
   sensitivity?: number
+  /** Opens the gesture guide sheet. */
+  onHelp?: () => void
 }
 
 const MOVE_MAX_DELTA = 100
@@ -36,6 +38,7 @@ export default function Touchpad({
   onButton,
   onScroll,
   sensitivity = 1.5,
+  onHelp,
 }: TouchpadProps) {
   const surfaceRef = useRef<HTMLDivElement>(null)
   const pointersRef = useRef<Map<number, PointerState>>(new Map())
@@ -194,14 +197,20 @@ export default function Touchpad({
       onContextMenu={(e) => e.preventDefault()}
     >
       <span className="touchpad-hint">
-        Geser = kursor · Ketuk = klik · 2 jari = scroll/klik kanan · Tahan = drag
+        1 jari: cursor · 2 jari: scroll · Tahan: drag
       </span>
-      <span className="touchpad-edge v" aria-hidden="true">
-        Scroll
-      </span>
-      <span className="touchpad-edge h" aria-hidden="true">
-        Scroll
-      </span>
+      {onHelp && (
+        <button
+          type="button"
+          className="touchpad-help"
+          aria-label="Cara menggunakan touchpad"
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+          onClick={onHelp}
+        >
+          ?
+        </button>
+      )}
     </div>
   )
 }

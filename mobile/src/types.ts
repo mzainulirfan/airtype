@@ -72,6 +72,7 @@ export interface DesktopStatusPayload {
   eventId: string
   sessionId: string
   status: 'waiting_pairing' | 'connected' | 'paused'
+  deviceName?: string
   timestamp: string
 }
 

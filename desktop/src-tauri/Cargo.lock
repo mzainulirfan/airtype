@@ -23,6 +23,7 @@ version = "0.1.0"
 dependencies = [
  "enigo",
  "futures-util",
+ "gethostname",
  "serde",
  "serde_json",
  "tauri",

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface TypingPreviewProps {
   text: string
@@ -7,10 +7,12 @@ interface TypingPreviewProps {
 }
 
 export default function TypingPreview({ text, cursor, onClear }: TypingPreviewProps) {
+  const [collapsed, setCollapsed] = useState(false)
   const bodyRef = useRef<HTMLDivElement>(null)
   const caretRef = useRef<HTMLSpanElement>(null)
 
   useEffect(() => {
+    if (collapsed) return
     const body = bodyRef.current
     const caret = caretRef.current
     if (!body || !caret) return
@@ -27,27 +29,42 @@ export default function TypingPreview({ text, cursor, onClear }: TypingPreviewPr
     } catch {
       /* ignore */
     }
-  }, [text, cursor])
+  }, [text, cursor, collapsed])
 
   return (
-    <div className="typing-preview">
+    <div className={`typing-preview ${collapsed ? 'collapsed' : ''}`}>
       <div className="typing-preview-head">
-        <span className="typing-preview-title">Preview ketikan</span>
+        <button type="button" className="collapse-btn" onClick={() => setCollapsed((c) => !c)}>
+          <svg
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            <path d={collapsed ? 'M6 9l6 6 6-6' : 'M6 15l6-6 6 6'} />
+          </svg>
+        </button>
+        <span className="typing-preview-title">Pratinjau ketikan</span>
         <button type="button" className="clear-btn" onClick={onClear} disabled={!text}>
           Hapus
         </button>
       </div>
-      <div className="typing-preview-body" ref={bodyRef}>
-        {text ? (
-          <div className="typing-preview-text">
-            {text.slice(0, cursor)}
-            <span className="preview-cursor" ref={caretRef} />
-            {text.slice(cursor)}
-          </div>
-        ) : (
-          <span className="typing-preview-placeholder">Ketik untuk melihat hasil di sini</span>
-        )}
-      </div>
+      {!collapsed && (
+        <div className="typing-preview-body" ref={bodyRef}>
+          {text ? (
+            <div className="typing-preview-text">
+              {text.slice(0, cursor)}
+              <span className="preview-cursor" ref={caretRef} />
+              {text.slice(cursor)}
+            </div>
+          ) : (
+            <span className="typing-preview-placeholder">Teks yang Anda ketik akan muncul di sini</span>
+          )}
+        </div>
+      )}
     </div>
   )
 }

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import ConnectScreen from './components/ConnectScreen'
+import GestureSheet from './components/GestureSheet'
 import InstallPrompt from './components/InstallPrompt'
 import Keyboard from './components/Keyboard'
-import QuickActions from './components/QuickActions'
 import SettingsPanel from './components/SettingsPanel'
+import ShortcutsBar from './components/ShortcutsBar'
 import StatusBar from './components/StatusBar'
 import Touchpad from './components/Touchpad'
 import TypingPreview from './components/TypingPreview'
@@ -11,7 +12,7 @@ import { SettingsProvider, useSettings } from './context/SettingsContext'
 import { useKeyboard } from './hooks/useKeyboard'
 import { useRealtime } from './hooks/useRealtime'
 import { useWakeLock } from './hooks/useWakeLock'
-import { createSupabaseClient, getChannelName } from './lib/supabase'
+import { createSupabaseClient } from './lib/supabase'
 import { parseSessionFromUrl, validateSessionId } from './lib/session'
 import type { Chord } from './lib/chords'
 import type { LayerId } from './lib/keys'
@@ -77,7 +78,7 @@ function applyPreviewToken(prev: PreviewState, token: EchoToken): PreviewState {
 }
 
 function AppInner() {
-  const { settings } = useSettings()
+  const { settings, update } = useSettings()
   const [sessionId, setSessionId] = useState<string | null>(() => {
     const urlSession = parseSessionFromUrl(window.location.href)?.sessionId
     if (urlSession) return urlSession
@@ -93,15 +94,18 @@ function AppInner() {
   const [showSettings, setShowSettings] = useState(false)
   const [keyboardLayer, setKeyboardLayer] = useState<LayerId>('letters')
   const [preview, setPreview] = useState<PreviewState>({ text: '', cursor: 0 })
+  const [showGestureGuide, setShowGestureGuide] = useState(false)
   const [desktopStatus, setDesktopStatus] = useState<
     'waiting_pairing' | 'connected' | 'paused' | null
   >(null)
+  const [deviceName, setDeviceName] = useState<string | undefined>(undefined)
 
   const client = useMemo(() => createSupabaseClient(), [])
 
   const handleMessage = useCallback((event: BroadcastPayload) => {
     if (event.type === 'desktop_status') {
       setDesktopStatus(event.status)
+      if (event.deviceName) setDeviceName(event.deviceName)
     }
   }, [])
 
@@ -136,6 +140,19 @@ function AppInner() {
   useEffect(() => {
     setPreview({ text: '', cursor: 0 })
   }, [sessionId])
+
+  // First-time onboarding: show the touchpad gesture guide once a session
+  // connects. Dismissed by closing the sheet.
+  useEffect(() => {
+    if (sessionId && !settings.seenGestureGuide) {
+      setShowGestureGuide(true)
+    }
+  }, [sessionId, settings.seenGestureGuide])
+
+  const handleCloseGestureGuide = useCallback(() => {
+    setShowGestureGuide(false)
+    if (!settings.seenGestureGuide) update({ seenGestureGuide: true })
+  }, [settings.seenGestureGuide, update])
 
   // Remember the session across refreshes so the user does not have to scan
   // the QR code again. Cleared when the user explicitly disconnects.
@@ -191,21 +208,24 @@ function AppInner() {
         status={status}
         paused={paused}
         desktopStatus={desktopStatus}
+        deviceName={deviceName}
         onTogglePause={handleTogglePause}
-        onDisconnect={handleDisconnect}
         onOpenSettings={() => setShowSettings(true)}
       />
-      <TypingPreview
-        text={preview.text}
-        cursor={preview.cursor}
-        onClear={() => setPreview({ text: '', cursor: 0 })}
-      />
-      <QuickActions onChord={handleChord} />
+      {settings.showTypingPreview && (
+        <TypingPreview
+          text={preview.text}
+          cursor={preview.cursor}
+          onClear={() => setPreview({ text: '', cursor: 0 })}
+        />
+      )}
+      <ShortcutsBar onChord={handleChord} favorites={settings.favoriteShortcuts} />
       <Touchpad
         onMove={mouseMove}
         onButton={mouseButton}
         onScroll={mouseScroll}
         sensitivity={settings.cursorSensitivity}
+        onHelp={() => setShowGestureGuide(true)}
       />
       <div className="keyboard-wrap">
         <Keyboard
@@ -220,8 +240,18 @@ function AppInner() {
           onRelease={release}
         />
       </div>
-      <div className="session-info">Sesi: {getChannelName(sessionId)}</div>
-      {showSettings && <SettingsPanel onClose={() => setShowSettings(false)} />}
+      {showGestureGuide && <GestureSheet onClose={handleCloseGestureGuide} />}
+      {showSettings && (
+        <SettingsPanel
+          onClose={() => setShowSettings(false)}
+          sessionId={sessionId}
+          connectionStatus={status}
+          desktopStatus={desktopStatus}
+          paused={paused}
+          deviceName={deviceName}
+          onDisconnect={handleDisconnect}
+        />
+      )}
     </div>
   )
 }

@@ -254,11 +254,13 @@ fn broadcast_status(inner: &Arc<AppInner>, status: &str) {
         return;
     };
     let session_id = inner.session_id.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    let device_name = gethostname::gethostname().to_string_lossy().into_owned();
     let payload = json!({
         "type": "desktop_status",
         "eventId": format!("status-{}", chrono_now()),
         "sessionId": session_id,
         "status": status,
+        "deviceName": device_name,
         "timestamp": chrono_now(),
     });
     let _ = tx.try_send(RealtimeCommand::Send(payload));

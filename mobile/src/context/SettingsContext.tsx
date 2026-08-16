@@ -19,6 +19,9 @@ export interface Settings {
   autoReturnToLetters: boolean
   strictMode: boolean
   cursorSensitivity: CursorSensitivity
+  showTypingPreview: boolean
+  seenGestureGuide: boolean
+  favoriteShortcuts: string[]
 }
 
 const STORAGE_KEY = 'airtype_settings'
@@ -30,6 +33,9 @@ const DEFAULTS: Settings = {
   autoReturnToLetters: true,
   strictMode: false,
   cursorSensitivity: 2,
+  showTypingPreview: true,
+  seenGestureGuide: false,
+  favoriteShortcuts: ['Esc', 'Ctrl+C', 'Ctrl+V', 'Alt+Tab', 'Ctrl+Z'],
 }
 
 interface SettingsContextValue {

@@ -108,7 +108,7 @@ const LETTERS_ROW_2: KeyRow = {
 
 const LETTERS_ROW_3: KeyRow = {
   keys: [
-    modifierKey('ShiftLeft', 'Shift'),
+    modifierKey('ShiftLeft', '⇧'),
     charKey('KeyZ', 'z', 'Z'),
     charKey('KeyX', 'x', 'X'),
     charKey('KeyC', 'c', 'C'),
@@ -122,11 +122,10 @@ const LETTERS_ROW_3: KeyRow = {
 
 const LETTERS_ROW_4: KeyRow = {
   keys: [
-    layerKey('LayerFn', 'Fn', 'fn'),
-    layerKey('LayerSymbols', '?123', 'symbols'),
-    charKey('Comma', ',', '<'),
+    modifierKey('ControlLeft', 'Ctrl'),
+    modifierKey('AltLeft', 'Alt'),
+    modifierKey('MetaLeft', 'Win'),
     specialKey('Space', ' '),
-    charKey('Period', '.', '>'),
     specialKey('Enter', '⏎'),
   ],
 }
@@ -274,8 +273,6 @@ const FN_ROW_5: KeyRow = {
 
 const FN_ROW_6: KeyRow = {
   keys: [
-    layerKey('LayerLetters', 'ABC', 'letters'),
-    layerKey('LayerSymbols', '?123', 'symbols'),
     specialKey('Space', ' '),
     specialKey('Enter', '⏎'),
   ],

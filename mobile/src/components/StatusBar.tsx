@@ -4,8 +4,8 @@ interface StatusBarProps {
   status: ConnectionStatus
   paused: boolean
   desktopStatus: 'waiting_pairing' | 'connected' | 'paused' | null
+  deviceName?: string
   onTogglePause: () => void
-  onDisconnect: () => void
   onOpenSettings: () => void
 }
 
@@ -26,15 +26,19 @@ export default function StatusBar({
   status,
   paused,
   desktopStatus,
+  deviceName,
   onTogglePause,
-  onDisconnect,
   onOpenSettings,
 }: StatusBarProps) {
   const cls = paused ? 'paused' : status
+  const label = paused ? 'Dijeda' : STATUS_LABEL[status]
   return (
     <div className={`status-bar ${cls}`}>
       <span className="status-dot" aria-hidden="true" />
-      <span className="status-label">{paused ? 'Dijeda' : STATUS_LABEL[status]}</span>
+      <span className="status-label">
+        {status === 'connected' && !paused && deviceName ? `${deviceName} · ` : ''}
+        {label}
+      </span>
       {desktopStatus && !paused && (
         <span className="desktop-status">{DESKTOP_LABEL[desktopStatus]}</span>
       )}
@@ -45,10 +49,7 @@ export default function StatusBar({
         </svg>
       </button>
       <button type="button" onClick={onTogglePause} className="pause-btn">
-        {paused ? 'Resume' : 'Pause'}
-      </button>
-      <button type="button" onClick={onDisconnect} className="pause-btn danger-btn">
-        Putus
+        {paused ? 'Lanjutkan' : 'Jeda'}
       </button>
     </div>
   )
