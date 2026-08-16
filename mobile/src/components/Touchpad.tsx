@@ -1,6 +1,6 @@
 import { useRef } from 'react'
 import type { PointerEvent } from 'react'
-import type { MouseButton } from '../types'
+import type { GestureName, MouseButton } from '../types'
 
 interface TouchpadProps {
   onMove: (dx: number, dy: number) => void
@@ -10,6 +10,8 @@ interface TouchpadProps {
   sensitivity?: number
   /** Opens the gesture guide sheet. */
   onHelp?: () => void
+  /** Fires MacBook-style multi-finger gestures (2/3-finger swipe, pinch). */
+  onGesture?: (gesture: GestureName) => void
 }
 
 const MOVE_MAX_DELTA = 100
@@ -20,8 +22,13 @@ const HOLD_STILL_RADIUS = 10
 const SCROLL_THRESHOLD_PX = 18
 const EDGE_X = 60
 const EDGE_Y = 48
+// Cumulative finger travel (actual px) to commit a swipe/nav gesture.
+const SWIPE_THRESHOLD_PX = 60
+// Finger-distance change to emit one pinch (zoom) notch.
+const PINCH_THRESHOLD_PX = 24
 
 type EdgeScroll = 'v' | 'h' | null
+type TwoFingerMode = 'none' | 'pinch' | 'pan'
 
 interface PointerState {
   x: number
@@ -39,6 +46,7 @@ export default function Touchpad({
   onScroll,
   sensitivity = 1.5,
   onHelp,
+  onGesture,
 }: TouchpadProps) {
   const surfaceRef = useRef<HTMLDivElement>(null)
   const pointersRef = useRef<Map<number, PointerState>>(new Map())
@@ -47,6 +55,15 @@ export default function Touchpad({
   const multiFingerRef = useRef(false)
   const dragActiveRef = useRef(false)
   const edgeScrollRef = useRef<EdgeScroll>(null)
+  const maxFingersRef = useRef(0)
+  const twoFingerModeRef = useRef<TwoFingerMode>('none')
+  const pinchStartDistRef = useRef(0)
+  const panXRef = useRef(0)
+  const panYRef = useRef(0)
+  const navAccXRef = useRef(0)
+  const navAccYRef = useRef(0)
+  const gestureLockedRef = useRef(false)
+  const gestureFiredRef = useRef(false)
 
   const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -57,6 +74,15 @@ export default function Touchpad({
       dragActiveRef.current = false
       scrollAccXRef.current = 0
       scrollAccYRef.current = 0
+      maxFingersRef.current = 0
+      twoFingerModeRef.current = 'none'
+      pinchStartDistRef.current = 0
+      panXRef.current = 0
+      panYRef.current = 0
+      navAccXRef.current = 0
+      navAccYRef.current = 0
+      gestureLockedRef.current = false
+      gestureFiredRef.current = false
       const rect = e.currentTarget.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
@@ -77,6 +103,11 @@ export default function Touchpad({
       downY: e.clientY,
       downTime: Date.now(),
     })
+    maxFingersRef.current = Math.max(maxFingersRef.current, map.size)
+    if (map.size === 2) {
+      const [a, b] = [...map.values()]
+      pinchStartDistRef.current = Math.hypot(b.x - a.x, b.y - a.y)
+    }
   }
 
   /** Turn accumulated finger travel into scroll notches in both axes. */
@@ -94,6 +125,7 @@ export default function Touchpad({
       scrollAccYRef.current -= ny * threshold
       onScroll(ny, 'vertical')
     }
+    if (nx !== 0 || ny !== 0) gestureFiredRef.current = true
   }
 
   const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
@@ -106,44 +138,107 @@ export default function Touchpad({
     state.x = e.clientX
     state.y = e.clientY
 
-    if (map.size >= 2 || multiFingerRef.current) {
-      // Two fingers (or the last finger of a two-finger gesture): scroll in
-      // both axes.
-      emitScroll(dx, dy)
+    if (map.size === 1 && !multiFingerRef.current) {
+      const edge = edgeScrollRef.current
+      if (edge === 'v') {
+        emitScroll(0, dy)
+        return
+      }
+      if (edge === 'h') {
+        emitScroll(dx, 0)
+        return
+      }
+
+      // Center: move the cursor. A drag only starts when the finger was held
+      // still for a moment — never while actually moving, otherwise ordinary
+      // cursor moves over text would start a drag and select everything.
+      const distFromDown = Math.hypot(e.clientX - state.downX, e.clientY - state.downY)
+      if (
+        Date.now() - state.downTime >= HOLD_DRAG_MS &&
+        !dragActiveRef.current &&
+        distFromDown < HOLD_STILL_RADIUS
+      ) {
+        dragActiveRef.current = true
+        onButton('down', 'left')
+      }
+      // Mild acceleration: faster finger travel moves the cursor further, so
+      // long flicks cover distance without a sluggish feel.
+      const speed = Math.hypot(dx, dy)
+      const accel = speed > 8 ? 1 + Math.min(1, (speed - 8) / 40) : 1
+      const gain = sensitivity * accel
+      onMove(
+        clamp(Math.round(dx * gain), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
+        clamp(Math.round(dy * gain), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
+      )
       return
     }
 
-    const edge = edgeScrollRef.current
-    if (edge === 'v') {
-      emitScroll(0, dy)
-      return
-    }
-    if (edge === 'h') {
-      emitScroll(dx, 0)
+    if (gestureLockedRef.current) return
+
+    // Three fingers: system navigation (task view / show desktop / switch
+    // virtual desktops). Accumulate the average travel of all fingers.
+    if (map.size >= 3) {
+      navAccXRef.current += dx / map.size
+      navAccYRef.current += dy / map.size
+      const ax = Math.abs(navAccXRef.current)
+      const ay = Math.abs(navAccYRef.current)
+      if (Math.max(ax, ay) > SWIPE_THRESHOLD_PX) {
+        gestureLockedRef.current = true
+        gestureFiredRef.current = true
+        if (ay > ax) {
+          onGesture?.(navAccYRef.current < 0 ? 'task_view' : 'show_desktop')
+        } else {
+          onGesture?.(navAccXRef.current < 0 ? 'desktop_prev' : 'desktop_next')
+        }
+      }
       return
     }
 
-    // Center: move the cursor. A drag only starts when the finger was held
-    // still for a moment — never while actually moving, otherwise ordinary
-    // cursor moves over text would start a drag and select everything.
-    const distFromDown = Math.hypot(e.clientX - state.downX, e.clientY - state.downY)
-    if (
-      Date.now() - state.downTime >= HOLD_DRAG_MS &&
-      !dragActiveRef.current &&
-      distFromDown < HOLD_STILL_RADIUS
-    ) {
-      dragActiveRef.current = true
-      onButton('down', 'left')
+    if (map.size === 2) {
+      const [a, b] = [...map.values()]
+      if (twoFingerModeRef.current === 'none') {
+        // Fingers moving towards/away from each other => pinch (zoom);
+        // moving in the same direction => pan (scroll / horizontal swipe).
+        const v1x = a.x - a.downX
+        const v1y = a.y - a.downY
+        const v2x = b.x - b.downX
+        const v2y = b.y - b.downY
+        if (v1x !== 0 || v1y !== 0 || v2x !== 0 || v2y !== 0) {
+          twoFingerModeRef.current = v1x * v2x + v1y * v2y < 0 ? 'pinch' : 'pan'
+        }
+      }
+      if (twoFingerModeRef.current === 'pinch') {
+        const cur = Math.hypot(b.x - a.x, b.y - a.y)
+        const change = cur - pinchStartDistRef.current
+        if (Math.abs(change) >= PINCH_THRESHOLD_PX) {
+          pinchStartDistRef.current = cur
+          gestureFiredRef.current = true
+          onGesture?.(change > 0 ? 'zoom_in' : 'zoom_out')
+        }
+        return
+      }
+
+      // Pan: keep the dominant axis. Vertical = scroll; horizontal past the
+      // swipe threshold = browser back/forward.
+      panXRef.current += dx / 2
+      panYRef.current += dy / 2
+      const ax = Math.abs(panXRef.current)
+      const ay = Math.abs(panYRef.current)
+      if (ay > ax) {
+        panXRef.current = 0
+        emitScroll(0, dy)
+      } else {
+        panYRef.current = 0
+        if (ax > SWIPE_THRESHOLD_PX) {
+          gestureLockedRef.current = true
+          gestureFiredRef.current = true
+          onGesture?.(panXRef.current > 0 ? 'forward' : 'back')
+        } else {
+          emitScroll(dx, 0)
+        }
+      }
+      return
     }
-    // Mild acceleration: faster finger travel moves the cursor further, so
-    // long flicks cover distance without a sluggish feel.
-    const speed = Math.hypot(dx, dy)
-    const accel = speed > 8 ? 1 + Math.min(1, (speed - 8) / 40) : 1
-    const gain = sensitivity * accel
-    onMove(
-      clamp(Math.round(dx * gain), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
-      clamp(Math.round(dy * gain), -MOVE_MAX_DELTA, MOVE_MAX_DELTA),
-    )
   }
 
   const handlePointerUp = (e: PointerEvent<HTMLDivElement>) => {
@@ -158,8 +253,12 @@ export default function Touchpad({
 
     if (dragActiveRef.current) {
       onButton('up', 'left')
-    } else if (dur < TAP_MAX_MS && dist < TAP_MAX_DIST) {
-      if (multiFingerRef.current) {
+    } else if (!gestureFiredRef.current && dur < TAP_MAX_MS && dist < TAP_MAX_DIST) {
+      const fingers = maxFingersRef.current
+      if (fingers >= 3) {
+        onButton('down', 'middle')
+        onButton('up', 'middle')
+      } else if (fingers >= 2) {
         onButton('down', 'right')
         onButton('up', 'right')
       } else {
@@ -172,6 +271,8 @@ export default function Touchpad({
     multiFingerRef.current = false
     dragActiveRef.current = false
     edgeScrollRef.current = null
+    gestureLockedRef.current = false
+    gestureFiredRef.current = false
   }
 
   const handlePointerCancel = (e: PointerEvent<HTMLDivElement>) => {
@@ -183,6 +284,8 @@ export default function Touchpad({
       multiFingerRef.current = false
       dragActiveRef.current = false
       edgeScrollRef.current = null
+      gestureLockedRef.current = false
+      gestureFiredRef.current = false
     }
   }
 
@@ -197,7 +300,7 @@ export default function Touchpad({
       onContextMenu={(e) => e.preventDefault()}
     >
       <span className="touchpad-hint">
-        1 jari: cursor · 2 jari: scroll · Tahan: drag
+        1 jari: cursor · 2 jari: scroll · 3 jari: task view
       </span>
       {onHelp && (
         <button

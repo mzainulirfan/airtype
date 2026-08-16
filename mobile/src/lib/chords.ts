@@ -1,4 +1,5 @@
 import type { Modifiers } from '../types'
+import type { GestureName } from '../types'
 
 export interface Chord {
   label: string
@@ -32,3 +33,25 @@ export const QUICK_ACTION_GROUPS: Chord[][] = [
 ]
 
 export const QUICK_ACTIONS: Chord[] = QUICK_ACTION_GROUPS.flat()
+
+/** Chords triggered by trackpad multi-finger gestures. */
+export const GESTURE_CHORDS: Record<Exclude<GestureName, 'middle_click'>, Chord> = {
+  back: { label: 'Alt+Left', key: { code: 'ArrowLeft', key: 'ArrowLeft' }, mods: { alt: true } },
+  forward: { label: 'Alt+Right', key: { code: 'ArrowRight', key: 'ArrowRight' }, mods: { alt: true } },
+  task_view: { label: 'Win+Tab', key: { code: 'Tab', key: 'Tab' }, mods: { meta: true }, hold: true },
+  show_desktop: { label: 'Win+D', key: { code: 'KeyD', key: 'd' }, mods: { meta: true }, hold: true },
+  desktop_next: {
+    label: 'Win+Ctrl+Right',
+    key: { code: 'ArrowRight', key: 'ArrowRight' },
+    mods: { meta: true, ctrl: true },
+    hold: true,
+  },
+  desktop_prev: {
+    label: 'Win+Ctrl+Left',
+    key: { code: 'ArrowLeft', key: 'ArrowLeft' },
+    mods: { meta: true, ctrl: true },
+    hold: true,
+  },
+  zoom_in: { label: 'Ctrl+Plus', key: { code: 'Equal', key: '=' }, mods: { ctrl: true } },
+  zoom_out: { label: 'Ctrl+Minus', key: { code: 'Minus', key: '-' }, mods: { ctrl: true } },
+}

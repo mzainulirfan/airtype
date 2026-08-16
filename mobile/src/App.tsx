@@ -15,8 +15,9 @@ import { useWakeLock } from './hooks/useWakeLock'
 import { createSupabaseClient } from './lib/supabase'
 import { parseSessionFromUrl, validateSessionId } from './lib/session'
 import type { Chord } from './lib/chords'
+import { GESTURE_CHORDS } from './lib/chords'
 import type { LayerId } from './lib/keys'
-import type { BroadcastPayload, EchoToken } from './types'
+import type { BroadcastPayload, EchoToken, GestureName } from './types'
 
 const CLIENT_ID = `mobile-${Math.random().toString(36).slice(2, 10)}`
 const SESSION_STORAGE_KEY = 'airtype_session'
@@ -191,6 +192,19 @@ function AppInner() {
     [runChord],
   )
 
+  const handleGesture = useCallback(
+    (gesture: GestureName) => {
+      if (gesture === 'middle_click') {
+        mouseButton('down', 'middle')
+        mouseButton('up', 'middle')
+        return
+      }
+      const chord = GESTURE_CHORDS[gesture]
+      if (chord) handleChord(chord)
+    },
+    [handleChord, mouseButton],
+  )
+
   useWakeLock(Boolean(sessionId) && !paused)
 
   if (!sessionId) {
@@ -226,6 +240,7 @@ function AppInner() {
         onScroll={mouseScroll}
         sensitivity={settings.cursorSensitivity}
         onHelp={() => setShowGestureGuide(true)}
+        onGesture={handleGesture}
       />
       <div className="keyboard-wrap">
         <Keyboard

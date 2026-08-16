@@ -67,6 +67,18 @@ export type EchoToken =
 
 export type ConnectionStatus = 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
 
+/** Trackpad multi-finger gestures (MacBook-style). */
+export type GestureName =
+  | 'back'
+  | 'forward'
+  | 'task_view'
+  | 'show_desktop'
+  | 'desktop_next'
+  | 'desktop_prev'
+  | 'zoom_in'
+  | 'zoom_out'
+  | 'middle_click'
+
 export interface DesktopStatusPayload {
   type: 'desktop_status'
   eventId: string

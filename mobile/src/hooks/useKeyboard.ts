@@ -301,10 +301,11 @@ export function useKeyboard({
   const release = useCallback(() => {}, [])
 
   /** Fire a shortcut chord (e.g. Ctrl+A) as a burst of key events without
-   * touching the on-screen modifier latch state. Modifiers are pressed via
-   * their snapshot, then released with an empty snapshot at the end. Chords
-   * flagged `hold` (OS shell shortcuts like Alt+Tab) keep the modifier held
-   * briefly before and after the key tap, otherwise Windows ignores them. */
+   * touching the on-screen modifier latch state. All active modifiers are
+   * pressed via their snapshot, then released with an empty snapshot at the
+   * end. Chords flagged `hold` (OS shell shortcuts like Alt+Tab) keep the
+   * modifiers held briefly before and after the key tap, otherwise Windows
+   * ignores them. */
   const runChord = useCallback(
     (chord: Chord) => {
       if (pausedRef.current) return
@@ -312,28 +313,32 @@ export function useKeyboard({
       clearChordTimers()
       flushBuffer()
       const mods: Modifiers = { ...initialModifiers, ...chord.mods }
-      const modCode = mods.shift
-        ? 'ShiftLeft'
-        : mods.ctrl
-          ? 'ControlLeft'
-          : mods.alt
-            ? 'AltLeft'
-            : mods.meta
-              ? 'MetaLeft'
-              : null
-      const modKey = modCode ? modCode.replace('Left', '') : ''
+      const modEntries: [string, string][] = []
+      if (mods.shift) modEntries.push(['ShiftLeft', 'Shift'])
+      if (mods.ctrl) modEntries.push(['ControlLeft', 'Control'])
+      if (mods.alt) modEntries.push(['AltLeft', 'Alt'])
+      if (mods.meta) modEntries.push(['MetaLeft', 'Meta'])
+      const pressMods = () => {
+        modEntries.forEach(([code, key]) => sendKeyEvent('key_down', code, key, mods))
+      }
+      const releaseMods = () => {
+        for (let i = modEntries.length - 1; i >= 0; i--) {
+          const [code, key] = modEntries[i]
+          sendKeyEvent('key_up', code, key, initialModifiers)
+        }
+      }
       const tapKey = () => {
         sendKeyEvent('key_down', chord.key.code, chord.key.key, mods)
         sendKeyEvent('key_up', chord.key.code, chord.key.key, mods)
       }
-      if (!modCode) {
+      if (modEntries.length === 0) {
         tapKey()
         return
       }
-      sendKeyEvent('key_down', modCode, modKey, mods)
+      pressMods()
       if (!chord.hold) {
         tapKey()
-        sendKeyEvent('key_up', modCode, modKey, initialModifiers)
+        releaseMods()
         return
       }
       chordTimersRef.current.push(
@@ -341,7 +346,7 @@ export function useKeyboard({
           tapKey()
           chordTimersRef.current.push(
             setTimeout(() => {
-              sendKeyEvent('key_up', modCode, modKey, initialModifiers)
+              releaseMods()
             }, CHORD_RELEASE_MS),
           )
         }, CHORD_HOLD_MS),
