@@ -72,11 +72,99 @@ body {
 }
 
 .app {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-areas:
+    'status'
+    'typing'
+    'shortcuts'
+    'touchpad'
+    'keyboard';
+  grid-template-rows: auto auto auto 1fr auto;
+  grid-template-columns: 1fr;
   height: 100dvh;
   padding: env(safe-area-inset-top) env(safe-area-inset-right)
     env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.status-bar {
+  grid-area: status;
+}
+
+.typing-preview {
+  grid-area: typing;
+}
+
+.shortcuts-bar {
+  grid-area: shortcuts;
+}
+
+.touchpad {
+  grid-area: touchpad;
+}
+
+.keyboard-wrap {
+  grid-area: keyboard;
+}
+
+/* ---------- Landscape: two-pane (touchpad left, keyboard right) ----------
+   Height is scarce in landscape, so the touchpad gets the full left column
+   and the keyboard lives on the right, scaled down to fit. Touchpad logic is
+   delta-based, so only the box shape/size changes. */
+@media (orientation: landscape) {
+  .app {
+    grid-template-areas:
+      'status typing'
+      'shortcuts keyboard'
+      'touchpad keyboard';
+    grid-template-rows: auto auto 1fr;
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .status-bar {
+    padding: 6px 12px;
+  }
+
+  /* Slim typing preview sitting above the keyboard on the right. */
+  .typing-preview {
+    margin: 0 8px 6px 0;
+    align-self: start;
+  }
+
+  .typing-preview-body {
+    max-height: 52px;
+    min-height: 26px;
+    padding: 3px 10px;
+    font-size: 13px;
+  }
+
+  .shortcuts-bar {
+    padding: 0 10px 6px;
+  }
+
+  /* Keep the touchpad tall enough for 2-finger gestures. */
+  .touchpad {
+    min-height: 120px;
+  }
+
+  /* Scale the keyboard down so it fits the shorter viewport. */
+  .keyboard-wrap {
+    --key-height: clamp(30px, 9dvh, 40px);
+    --key-font: clamp(12px, 2.6dvh, 15px);
+    padding: 6px 8px 8px;
+  }
+
+  .keyboard {
+    gap: 5px;
+  }
+
+  .key-row {
+    gap: 5px;
+  }
+
+  .keyboard.nav .key {
+    height: calc(var(--key-height) * 1.2);
+    font-size: calc(var(--key-font) + 4px);
+  }
 }
 
 /* ---------- Status bar ---------- */
