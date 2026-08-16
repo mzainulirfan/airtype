@@ -25,6 +25,12 @@ export const QUICK_ACTION_GROUPS: Chord[][] = [
   ],
   [
     { label: 'Tab', key: { code: 'Tab', key: 'Tab' }, mods: {} },
+    { label: 'Ctrl+Tab', key: { code: 'Tab', key: 'Tab' }, mods: { ctrl: true } },
+    {
+      label: 'Ctrl+Shift+Tab',
+      key: { code: 'Tab', key: 'Tab' },
+      mods: { ctrl: true, shift: true },
+    },
     { label: 'Alt+Tab', key: { code: 'Tab', key: 'Tab' }, mods: { alt: true }, hold: true },
     { label: 'Win+Tab', key: { code: 'Tab', key: 'Tab' }, mods: { meta: true }, hold: true },
     { label: 'Ctrl+W', key: { code: 'KeyW', key: 'w' }, mods: { ctrl: true } },
@@ -44,6 +50,25 @@ export const QUICK_ACTION_GROUPS: Chord[][] = [
       mods: { meta: true, ctrl: true },
       hold: true,
     },
+  ],
+  [
+    { label: 'Ctrl+T', key: { code: 'KeyT', key: 't' }, mods: { ctrl: true } },
+    {
+      label: 'Ctrl+Shift+T',
+      key: { code: 'KeyT', key: 't' },
+      mods: { ctrl: true, shift: true },
+    },
+    { label: 'Ctrl+R', key: { code: 'KeyR', key: 'r' }, mods: { ctrl: true } },
+    { label: 'Ctrl+L', key: { code: 'KeyL', key: 'l' }, mods: { ctrl: true } },
+    {
+      label: 'Ctrl+Shift+V',
+      key: { code: 'KeyV', key: 'v' },
+      mods: { ctrl: true, shift: true },
+    },
+    { label: 'Ctrl+P', key: { code: 'KeyP', key: 'p' }, mods: { ctrl: true } },
+    { label: 'Win+V', key: { code: 'KeyV', key: 'v' }, mods: { meta: true } },
+    { label: 'Win+E', key: { code: 'KeyE', key: 'e' }, mods: { meta: true } },
+    { label: 'Win+L', key: { code: 'KeyL', key: 'l' }, mods: { meta: true } },
   ],
 ]
 
