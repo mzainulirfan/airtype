@@ -89,8 +89,9 @@ const els = {
   copyCode: $('copy-code'),
   copyCodeCompact: $('copy-code-compact'),
   copyUrl: $('copy-url'),
-  copyUrlCompact: $('copy-url-compact'),
   newSession: $('new-session'),
+  themeToggle: $('theme-toggle'),
+  activityCard: $('activity-card'),
   connTitle: $('conn-title'),
   connHost: $('conn-host'),
   connDuration: $('conn-duration'),
@@ -100,6 +101,7 @@ const els = {
   statMouse: $('stat-mouse'),
   lastActivity: $('last-activity'),
   pause: $('pause'),
+  pauseLabel: $('pause-label'),
   disconnect: $('disconnect'),
   history: $('history'),
   activityCount: $('activity-count'),
@@ -117,6 +119,54 @@ let historyEnabled = true
 let qrToken = 0
 let toastTimer: number | undefined
 let disconnectTimer: number | undefined
+let pausedTotalMs = 0
+let pausedSince: number | null = null
+
+type ThemeMode = 'light' | 'dark' | 'system'
+
+const THEME_KEY = 'airtype_helper_theme'
+const THEME_ORDER: ThemeMode[] = ['light', 'dark', 'system']
+const THEME_LABEL: Record<ThemeMode, string> = {
+  light: 'terang',
+  dark: 'gelap',
+  system: 'mengikuti sistem',
+}
+
+function applyTheme(mode: ThemeMode) {
+  const dark =
+    mode === 'dark' ||
+    (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+  document.documentElement.dataset.themeMode = mode
+  const label = `Tema: ${THEME_LABEL[mode]}`
+  els.themeToggle.setAttribute('aria-label', label)
+  els.themeToggle.title = label
+}
+
+function initTheme() {
+  let mode: ThemeMode = 'light'
+  try {
+    const stored = localStorage.getItem(THEME_KEY)
+    if (stored === 'dark' || stored === 'system') mode = stored
+  } catch {
+    // storage can be unavailable in hardened environments
+  }
+  applyTheme(mode)
+
+  els.themeToggle.addEventListener('click', () => {
+    mode = THEME_ORDER[(THEME_ORDER.indexOf(mode) + 1) % THEME_ORDER.length]
+    try {
+      localStorage.setItem(THEME_KEY, mode)
+    } catch {
+      // theme still applies for this session
+    }
+    applyTheme(mode)
+  })
+
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    if (mode === 'system') applyTheme('system')
+  })
+}
 
 function normalizeStatus(value: string): Status {
   return value in STATUS_LABEL ? (value as Status) : 'idle'
@@ -130,11 +180,23 @@ function isLinkedView(): boolean {
   )
 }
 
+function resetPauseClock() {
+  pausedTotalMs = 0
+  pausedSince = status === 'paused' ? Date.now() : null
+}
+
 function applyStatus(next: Status) {
+  const wasPaused = status === 'paused'
   status = next
+  if (next === 'paused' && !wasPaused) {
+    pausedSince = Date.now()
+  } else if (next !== 'paused' && wasPaused && pausedSince !== null) {
+    pausedTotalMs += Date.now() - pausedSince
+    pausedSince = null
+  }
   els.status.className = `status ${next}`
   els.statusLabel.textContent = STATUS_LABEL[next]
-  els.pause.textContent = next === 'paused' ? 'Lanjutkan' : 'Pause'
+  els.pauseLabel.textContent = next === 'paused' ? 'Lanjutkan' : 'Pause'
   els.pause.setAttribute('aria-pressed', String(next === 'paused'))
   renderView()
 }
@@ -241,8 +303,12 @@ function relativeTime(at: number): string {
 
 function renderConnectionMeta() {
   if (client) {
+    // Duration counts linked time only: paused spans are subtracted.
+    const pausedSoFar =
+      pausedTotalMs + (pausedSince !== null ? Date.now() - pausedSince : 0)
     const prefix = client.approximate ? '±' : ''
-    els.connDuration.textContent = prefix + formatDuration(Date.now() - client.connectedAtMs)
+    els.connDuration.textContent =
+      prefix + formatDuration(Date.now() - client.connectedAtMs - pausedSoFar)
   } else {
     els.connDuration.textContent = '—'
   }
@@ -298,11 +364,22 @@ function emptyStateText(): string {
 function renderHistory() {
   const wasAtTop = els.history.scrollTop <= 12
   els.activityCount.textContent = `${history.length} entri`
+  els.activityCard.classList.toggle('is-empty', history.length === 0)
 
   if (history.length === 0) {
     const empty = document.createElement('div')
     empty.className = 'history-empty'
-    empty.textContent = emptyStateText()
+
+    const glyph = document.createElement('span')
+    glyph.className = 'empty-glyph'
+    glyph.setAttribute('aria-hidden', 'true')
+    glyph.innerHTML =
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M10.5 10h.01M14 10h.01M17.5 10h.01M8 13.5h8"/></svg>'
+
+    const text = document.createElement('span')
+    text.textContent = emptyStateText()
+
+    empty.append(glyph, text)
     els.history.replaceChildren(empty)
     updateHistoryFade()
     return
@@ -426,10 +503,12 @@ async function startNewSession() {
     client = null
     stats = emptyStats()
     history = []
+    resetPauseClock()
     renderSession()
     renderClient()
     renderStats()
     renderHistory()
+    renderConnectionMeta()
     resetDisconnect()
     showToast('Sesi baru dibuat')
   } catch (err) {
@@ -457,6 +536,7 @@ function applySnapshot(snapshot: UiSnapshot) {
   historyEnabled = snapshot.historyEnabled
 
   els.hostname.textContent = hostname || '—'
+  resetPauseClock()
   renderSession()
   renderClient()
   renderStats()
@@ -481,6 +561,7 @@ async function createBridge(): Promise<Bridge> {
 }
 
 async function init() {
+  initTheme()
   bridge = await createBridge()
 
   await bridge.listen<Status>('airtype:status', (event) =>
@@ -491,7 +572,9 @@ async function init() {
     renderHistory()
   })
   await bridge.listen<ClientInfo | null>('airtype:client', (event) => {
+    const changed = event.payload?.connectedAtMs !== client?.connectedAtMs
     client = event.payload
+    if (changed) resetPauseClock()
     renderClient()
     renderView()
   })
@@ -516,9 +599,6 @@ async function init() {
     void copyText(session?.sessionId ?? '', 'Kode sesi disalin'),
   )
   els.copyUrl.addEventListener('click', () =>
-    void copyText(session?.pairingUrl ?? '', 'Tautan pairing disalin'),
-  )
-  els.copyUrlCompact.addEventListener('click', () =>
     void copyText(session?.pairingUrl ?? '', 'Tautan pairing disalin'),
   )
 
