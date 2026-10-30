@@ -36,6 +36,9 @@ function setStatus(status: Status) {
   const el = statusEl()
   el.textContent = statusLabel(status)
   el.className = `status ${status}`
+  // Keep the button label in sync when the pause state is changed from the
+  // tray menu or by the idle auto-pause.
+  pauseBtn().textContent = status === 'paused' ? 'Lanjutkan' : 'Pause'
 }
 
 function statusLabel(status: Status): string {
@@ -106,7 +109,17 @@ async function init() {
   await listen<HistoryItem[]>('airtype:history', (e) => renderHistory(e.payload))
 
   pauseBtn().addEventListener('click', () => invoke('toggle_pause'))
-  newSessionBtn().addEventListener('click', () => invoke('new_session'))
+  newSessionBtn().addEventListener('click', async () => {
+    try {
+      // new_session returns the fresh SessionInfo; use it directly so the
+      // code and QR update without reloading the window.
+      const info = await invoke<SessionInfo>('new_session')
+      currentSession = info
+      renderSession(info)
+    } catch (err) {
+      statusEl().textContent = `Error: ${err}`
+    }
+  })
 
   await invoke('init_app')
   await refresh()

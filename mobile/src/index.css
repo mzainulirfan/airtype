@@ -1030,10 +1030,10 @@ body {
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
-  font-size: 22px;
+  font-size: 15px;
   font-weight: 600;
   text-align: center;
-  letter-spacing: 4px;
+  letter-spacing: 1px;
   text-transform: lowercase;
   outline: none;
 }

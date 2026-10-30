@@ -1,7 +1,9 @@
 use uuid::Uuid;
 
 pub fn generate_session_id() -> String {
-    Uuid::new_v4().simple().to_string()[..6].to_string()
+    // 32 hex chars (128 bits), per the security requirement in the PRD: a
+    // short code is guessable on a public Supabase Realtime channel.
+    Uuid::new_v4().simple().to_string()
 }
 
 pub fn channel_name(session_id: &str) -> String {

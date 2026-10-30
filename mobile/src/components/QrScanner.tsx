@@ -6,7 +6,7 @@ interface QrScannerProps {
   onClose: () => void
 }
 
-const SESSION_RE = /^[0-9a-f]{6}$/
+const SESSION_RE = /^[0-9a-f]{32}$/
 const SCAN_WIDTH = 480
 
 function extractSession(raw: string): string | null {
