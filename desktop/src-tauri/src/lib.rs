@@ -8,7 +8,9 @@ mod session;
 mod types;
 
 use tauri::{
-    image::Image, menu::{MenuBuilder, MenuItemBuilder}, tray::{TrayIconBuilder, TrayIconEvent},
+    image::Image,
+    menu::{MenuBuilder, MenuItemBuilder},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, WindowEvent,
 };
 
@@ -18,6 +20,13 @@ use crate::config::Config;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.unminimize();
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
         .manage(AppState::new(Config::load()))
         .setup(|app| {
             eprintln!("[airtype] app starting");
@@ -35,8 +44,7 @@ pub fn run() {
             app::init_app,
             app::new_session,
             app::toggle_pause,
-            app::get_session_info,
-            app::get_history,
+            app::get_ui_snapshot,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -70,7 +78,17 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             _ => {}
         })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click { .. } = event {
+            // Right-click opens the context menu; showing/focusing the window
+            // here would deactivate the popup and close it immediately.
+            let left_click = matches!(
+                event,
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                }
+            );
+            if left_click {
                 let app = tray.app_handle();
                 if let Some(window) = app.get_webview_window("main") {
                     let _ = window.show();

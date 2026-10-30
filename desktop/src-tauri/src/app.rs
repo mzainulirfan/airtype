@@ -1,7 +1,7 @@
 use std::collections::{HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -11,7 +11,10 @@ use crate::keyboard::KeyboardSimulator;
 use crate::mouse::MouseSimulator;
 use crate::realtime::{spawn_realtime, RealtimeCommand};
 use crate::session::{channel_name, generate_session_id, pairing_url, realtime_topic, realtime_ws_url};
-use crate::types::{HistoryItem, KeyEventPayload, MouseEventPayload, SessionInfo, TypeTextPayload};
+use crate::types::{
+    ClientInfo, HistoryItem, KeyEventPayload, MouseEventPayload, SessionInfo, Stats,
+    TypeTextPayload, UiSnapshot,
+};
 
 /// If the mobile goes silent for this long, fall back to waiting_pairing.
 const MOBILE_PRESENCE_TIMEOUT_SECS: u64 = 60;
@@ -22,6 +25,14 @@ const STATUS_BROADCAST_INTERVAL_SECS: u64 = 10;
 
 pub struct AppState {
     pub inner: Arc<AppInner>,
+}
+
+/// The currently linked mobile client. `connected_at` is preserved while the
+/// same pairing stays alive (the mobile regenerates its client id on reload).
+pub struct ClientLink {
+    pub id: String,
+    pub connected_at: Instant,
+    pub approximate: bool,
 }
 
 pub struct AppInner {
@@ -44,6 +55,9 @@ pub struct AppInner {
     pub last_presence: Mutex<String>,
     pub last_status_sent: Mutex<Instant>,
     pub init_started: AtomicBool,
+    pub client: Mutex<Option<ClientLink>>,
+    pub stats: Mutex<Stats>,
+    pub stats_dirty: AtomicBool,
 }
 
 impl AppState {
@@ -68,6 +82,9 @@ impl AppState {
                 last_presence: Mutex::new(String::new()),
                 last_status_sent: Mutex::new(Instant::now()),
                 init_started: AtomicBool::new(false),
+                client: Mutex::new(None),
+                stats: Mutex::new(Stats::default()),
+                stats_dirty: AtomicBool::new(false),
             }),
         }
     }
@@ -197,8 +214,15 @@ pub fn init_app(app: AppHandle) -> Result<(), String> {
             if !inner.paused.load(Ordering::SeqCst) {
                 let mobile_idle = inner.last_mobile_at.lock().unwrap_or_else(|e| e.into_inner()).elapsed().as_secs();
                 if mobile_idle > MOBILE_PRESENCE_TIMEOUT_SECS {
+                    clear_client(&inner, &app2);
                     set_presence(&inner, &app2, "waiting_pairing");
                 }
+            }
+
+            // Stats are incremented per event but flushed here at most once a
+            // second; otherwise touchpad moves would flood the IPC channel.
+            if inner.stats_dirty.swap(false, Ordering::SeqCst) {
+                emit_stats(&inner, &app2);
             }
 
             let timeout = inner.config.auto_pause_after_ms;
@@ -228,8 +252,28 @@ pub fn new_session(app: AppHandle) -> Result<SessionInfo, String> {
     }
     *state.inner.session_id.lock().unwrap_or_else(|e| e.into_inner()) = generate_session_id();
     state.inner.dedup.lock().unwrap_or_else(|e| e.into_inner()).clear();
+
+    // Never carry presence/client/stats from the previous session: otherwise
+    // the fresh session would briefly report "connected" for a phone that is
+    // still linked to the old channel.
+    *state.inner.last_presence.lock().unwrap_or_else(|e| e.into_inner()) = "waiting_pairing".to_string();
+    *state.inner.client.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    *state.inner.stats.lock().unwrap_or_else(|e| e.into_inner()) = Stats::default();
+    state.inner.stats_dirty.store(false, Ordering::SeqCst);
+    // Rotating the session is an explicit "start over" action, so lift any
+    // idle auto-pause (and a manual one) to avoid a fresh session that
+    // silently swallows input.
+    if state.inner.paused.swap(false, Ordering::SeqCst) {
+        state.inner.auto_paused.store(false, Ordering::SeqCst);
+        state.inner.keyboard.release_all();
+    }
+    *state.inner.last_activity.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
+
+    let _ = app.emit("airtype:client", Option::<ClientInfo>::None);
+    let _ = app.emit("airtype:stats", Stats::default());
+
     state.restart_realtime(&app)?;
-    Ok(get_session_info(app.state::<AppState>()))
+    Ok(session_info(&state.inner))
 }
 
 #[tauri::command]
@@ -265,22 +309,109 @@ fn set_paused(inner: &Arc<AppInner>, app: &AppHandle, paused: bool) {
 }
 
 #[tauri::command]
-pub fn get_session_info(state: State<'_, AppState>) -> SessionInfo {
-    let session_id = state.inner.session_id.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    SessionInfo {
-        session_id: session_id.clone(),
-        channel: channel_name(&session_id),
-        pairing_url: state.inner.pairing_url.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+pub fn get_ui_snapshot(state: State<'_, AppState>) -> UiSnapshot {
+    let inner = &state.inner;
+    let presence = inner.last_presence.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    UiSnapshot {
+        session: session_info(inner),
+        presence,
+        paused: inner.paused.load(Ordering::SeqCst),
+        client: inner
+            .client
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_ref()
+            .map(|link| client_info(link)),
+        stats: *inner.stats.lock().unwrap_or_else(|e| e.into_inner()),
+        history: inner
+            .history
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .cloned()
+            .collect(),
+        hostname: hostname(),
+        auto_pause_after_ms: inner.config.auto_pause_after_ms,
+        history_enabled: inner.config.history_enabled,
     }
 }
 
-#[tauri::command]
-pub fn get_history(state: State<'_, AppState>) -> Vec<HistoryItem> {
-    state.inner.history.lock().unwrap_or_else(|e| e.into_inner()).iter().cloned().collect()
+fn session_info(inner: &Arc<AppInner>) -> SessionInfo {
+    let session_id = inner.session_id.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    SessionInfo {
+        session_id: session_id.clone(),
+        channel: channel_name(&session_id),
+        pairing_url: inner.pairing_url.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+    }
+}
+
+fn hostname() -> String {
+    gethostname::gethostname().to_string_lossy().into_owned()
+}
+
+fn client_info(link: &ClientLink) -> ClientInfo {
+    // Epoch ms of when the link started, derived from the monotonic Instant so
+    // wall-clock adjustments never move the "connected since" backwards.
+    let connected_at_ms = now_ms().saturating_sub(link.connected_at.elapsed().as_millis() as u64);
+    ClientInfo {
+        client_id: link.id.clone(),
+        connected_at_ms,
+        approximate: link.approximate,
+    }
 }
 
 fn emit_status(app: &AppHandle, status: &str) {
     let _ = app.emit("airtype:status", status);
+}
+
+fn emit_stats(inner: &Arc<AppInner>, app: &AppHandle) {
+    let stats = *inner.stats.lock().unwrap_or_else(|e| e.into_inner());
+    let _ = app.emit("airtype:stats", stats);
+}
+
+/// Record (or refresh) the linked mobile. The pairing start time is preserved
+/// while the link is alive; it is only reset after a real disconnect.
+fn record_client(inner: &Arc<AppInner>, app: &AppHandle, client_id: &str, approximate: bool) {
+    if client_id.is_empty() {
+        return;
+    }
+    let mut link = inner.client.lock().unwrap_or_else(|e| e.into_inner());
+    match link.as_mut() {
+        Some(existing) => {
+            if existing.id == client_id {
+                return;
+            }
+            existing.id = client_id.to_string();
+        }
+        None => {
+            *link = Some(ClientLink {
+                id: client_id.to_string(),
+                connected_at: Instant::now(),
+                approximate,
+            });
+        }
+    }
+    let info = client_info(link.as_ref().expect("link set above"));
+    drop(link);
+    eprintln!("[airtype] client linked: {} (approx={approximate})", info.client_id);
+    let _ = app.emit("airtype:client", Some(info));
+}
+
+fn clear_client(inner: &Arc<AppInner>, app: &AppHandle) {
+    let had_client = inner
+        .client
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .take()
+        .is_some();
+    if had_client {
+        eprintln!("[airtype] client cleared");
+        let _ = app.emit("airtype:client", Option::<ClientInfo>::None);
+    }
+}
+
+fn payload_client_id(value: &Value) -> &str {
+    value.get("clientId").and_then(Value::as_str).unwrap_or("")
 }
 
 /// Broadcast `desktop_status` over the session channel so mobile clients see it.
@@ -290,13 +421,12 @@ fn broadcast_status(inner: &Arc<AppInner>, status: &str) {
         return;
     };
     let session_id = inner.session_id.lock().unwrap_or_else(|e| e.into_inner()).clone();
-    let device_name = gethostname::gethostname().to_string_lossy().into_owned();
     let payload = json!({
         "type": "desktop_status",
         "eventId": format!("status-{}", chrono_now()),
         "sessionId": session_id,
         "status": status,
-        "deviceName": device_name,
+        "deviceName": hostname(),
         "timestamp": chrono_now(),
     });
     let _ = tx.try_send(RealtimeCommand::Send(payload));
@@ -392,6 +522,9 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
     // Presence events update pairing status and are not affected by pause.
     match event_type {
         "client_joined" => {
+            // Link the client before the pause check below, otherwise a
+            // desktop that is manually paused never learns the new client id.
+            record_client(inner, app, payload_client_id(&value), false);
             *inner.last_mobile_at.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
             *inner.last_activity.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
             // A mobile reconnecting means the user wants to type again: undo an
@@ -416,6 +549,9 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
         }
         "client_heartbeat" => {
             *inner.last_mobile_at.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
+            // Recover the link after a desktop restart: the phone only sends
+            // client_joined on (re)subscribe or visibility change.
+            record_client(inner, app, payload_client_id(&value), true);
             if inner.paused.load(Ordering::SeqCst) {
                 return;
             }
@@ -429,6 +565,19 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
             return;
         }
         "client_left" => {
+            let left_id = payload_client_id(&value);
+            let is_current = inner
+                .client
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .as_ref()
+                .map(|link| left_id.is_empty() || link.id == left_id)
+                .unwrap_or(false);
+            // A stale client_left from a superseded tab must not tear down the
+            // link of the phone that is currently connected.
+            if is_current {
+                clear_client(inner, app);
+            }
             eprintln!("[airtype] presence: client_left -> waiting_pairing");
             set_presence(inner, app, "waiting_pairing");
             return;
@@ -446,72 +595,114 @@ fn handle_incoming(inner: &Arc<AppInner>, app: &AppHandle, value: Value) {
         return;
     }
 
+    // Input events also prove the phone is linked (desktop restart case).
+    record_client(inner, app, payload_client_id(&value), true);
+
     *inner.last_activity.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
 
-    let now = chrono_now();
+    let now = now_ms();
+    let now_str = now.to_string();
 
-    let (kind, code, text, result) = match event_type {
+    // `record` keeps routine noise (key releases, motion-only touchpad moves)
+    // out of the activity feed while still simulating them.
+    let (kind, code, text, action, record, result) = match event_type {
         "key_down" => match serde_json::from_value::<KeyEventPayload>(value) {
             Ok(p) => (
                 "key_down".to_string(),
                 Some(p.code.clone()),
                 None,
+                None,
+                true,
                 inner.keyboard.key_down(&p.code, &p.key, &p.modifiers),
             ),
-            Err(e) => ("key_down".into(), None, None, Err(e.to_string())),
+            Err(e) => ("key_down".into(), None, None, None, true, Err(e.to_string())),
         },
         "key_up" => match serde_json::from_value::<KeyEventPayload>(value) {
             Ok(p) => (
                 "key_up".to_string(),
                 Some(p.code.clone()),
                 None,
+                None,
+                false,
                 inner.keyboard.key_up(&p.code, &p.key, &p.modifiers),
             ),
-            Err(e) => ("key_up".into(), None, None, Err(e.to_string())),
+            Err(e) => ("key_up".into(), None, None, None, false, Err(e.to_string())),
         },
         "type_text" => match serde_json::from_value::<TypeTextPayload>(value) {
             Ok(p) => (
                 "type_text".to_string(),
                 None,
                 Some(p.text.clone()),
+                None,
+                true,
                 inner.keyboard.type_text(&p.text),
             ),
-            Err(e) => ("type_text".into(), None, None, Err(e.to_string())),
+            Err(e) => ("type_text".into(), None, None, None, true, Err(e.to_string())),
         },
         "mouse" => match serde_json::from_value::<MouseEventPayload>(value) {
-            Ok(p) => ("mouse".to_string(), None, None, run_mouse(inner, &p)),
-            Err(e) => ("mouse".into(), None, None, Err(e.to_string())),
+            Ok(p) => {
+                let action = p.action.clone();
+                let record = action != "move";
+                ("mouse".to_string(), None, None, Some(action), record, run_mouse(inner, &p))
+            }
+            Err(e) => ("mouse".into(), None, None, None, false, Err(e.to_string())),
         },
         _ => return,
     };
 
+    let simulated = result.is_ok();
     if let Err(e) = &result {
         eprintln!("[airtype] simulation failed: {e}");
     }
 
-    if inner.config.history_enabled {
-        let item = HistoryItem {
-            id: event_id.clone(),
-            kind,
-            code,
-            text,
-            received_at: now,
-            simulated: result.is_ok(),
-        };
-        let mut history = inner.history.lock().unwrap_or_else(|e| e.into_inner());
-        history.push_front(item);
-        if history.len() > inner.config.history_limit {
-            history.pop_back();
+    {
+        let mut stats = inner.stats.lock().unwrap_or_else(|e| e.into_inner());
+        match kind.as_str() {
+            "type_text" => {
+                stats.chars += text
+                    .as_ref()
+                    .map(|t| t.chars().count() as u64)
+                    .unwrap_or(0);
+            }
+            "key_down" => stats.key_events += 1,
+            "mouse" => stats.mouse_events += 1,
+            _ => {}
         }
-        let snapshot: Vec<HistoryItem> = history.iter().cloned().collect();
+        if !simulated {
+            stats.errors += 1;
+        }
+        stats.last_activity_ms = Some(now);
+    }
+    inner.stats_dirty.store(true, Ordering::SeqCst);
+
+    if record && inner.config.history_enabled {
+        let snapshot: Vec<HistoryItem> = {
+            let mut history = inner.history.lock().unwrap_or_else(|e| e.into_inner());
+            history.push_front(HistoryItem {
+                id: event_id.clone(),
+                kind,
+                code,
+                text,
+                action,
+                received_at: now_str,
+                simulated,
+            });
+            if history.len() > inner.config.history_limit {
+                history.pop_back();
+            }
+            history.iter().cloned().collect()
+        };
         let _ = app.emit("airtype:history", snapshot);
     }
 }
 
-fn chrono_now() -> String {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
-        .as_millis()
-        .to_string()
+        .as_millis() as u64
+}
+
+fn chrono_now() -> String {
+    now_ms().to_string()
 }

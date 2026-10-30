@@ -13,8 +13,10 @@
     "windows": [
       {
         "title": "AirType Helper",
-        "width": 480,
-        "height": 640,
+        "width": 500,
+        "height": 720,
+        "minWidth": 440,
+        "minHeight": 560,
         "resizable": true,
         "center": true,
         "visible": true
@@ -22,12 +24,6 @@
     ],
     "security": {
       "csp": null
-    },
-    "trayIcon": {
-      "id": "airtype-tray",
-      "iconPath": "icons/icon.ico",
-      "tooltip": "AirType Helper",
-      "iconAsTemplate": false
     }
   },
   "bundle": {
