@@ -6,10 +6,11 @@ const QrScanner = lazy(() => import('./QrScanner'))
 
 interface ConnectScreenProps {
   initialSession?: string
+  notice?: string | null
   onConnect: (sessionId: string) => void
 }
 
-export default function ConnectScreen({ initialSession, onConnect }: ConnectScreenProps) {
+export default function ConnectScreen({ initialSession, notice, onConnect }: ConnectScreenProps) {
   const [sessionId, setSessionId] = useState(initialSession ?? '')
   const [error, setError] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
@@ -64,6 +65,12 @@ export default function ConnectScreen({ initialSession, onConnect }: ConnectScre
           <div className="notice">
             Supabase belum dikonfigurasi. Set <code>VITE_SUPABASE_URL</code> dan{' '}
             <code>VITE_SUPABASE_ANON_KEY</code> di <code>.env</code>.
+          </div>
+        )}
+
+        {notice && (
+          <div className="notice" role="status">
+            {notice}
           </div>
         )}
 

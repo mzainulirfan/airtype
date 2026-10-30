@@ -246,6 +246,9 @@ pub fn init_app(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn new_session(app: AppHandle) -> Result<SessionInfo, String> {
     let state = app.state::<AppState>();
+    // Send session_ended on the old channel before closing it, so the phone
+    // leaves keyboard mode and shows the pairing screen again.
+    notify_session_end(&app);
     // Stop old realtime connection cleanly.
     if let Some(tx) = state.inner.cmd_tx.lock().unwrap_or_else(|e| e.into_inner()).take() {
         let _ = tx.try_send(RealtimeCommand::Stop);
@@ -412,6 +415,28 @@ fn clear_client(inner: &Arc<AppInner>, app: &AppHandle) {
 
 fn payload_client_id(value: &Value) -> &str {
     value.get("clientId").and_then(Value::as_str).unwrap_or("")
+}
+
+/// Tell linked phones the session is over before rotating or quitting.
+/// Without this they keep the old channel and stay in keyboard mode forever.
+pub fn notify_session_end(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let session_id = state
+        .inner
+        .session_id
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .clone();
+    let payload = json!({
+        "type": "session_ended",
+        "eventId": format!("ended-{}", chrono_now()),
+        "sessionId": session_id,
+        "timestamp": chrono_now(),
+    });
+    let cmd_tx = state.inner.cmd_tx.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(tx) = cmd_tx.as_ref() {
+        let _ = tx.try_send(RealtimeCommand::Send(payload));
+    }
 }
 
 /// Broadcast `desktop_status` over the session channel so mobile clients see it.

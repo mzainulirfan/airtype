@@ -92,6 +92,7 @@ function AppInner() {
     return null
   })
   const [paused, setPaused] = useState(false)
+  const [connectNotice, setConnectNotice] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [keyboardLayer, setKeyboardLayer] = useState<LayerId>('letters')
   const [preview, setPreview] = useState<PreviewState>({ text: '', cursor: 0 })
@@ -106,6 +107,15 @@ function AppInner() {
   const client = useMemo(() => createSupabaseClient(), [])
 
   const handleMessage = useCallback((event: BroadcastPayload) => {
+    if (event.type === 'session_ended') {
+      setSessionId(null)
+      setDesktopStatus(null)
+      setDeviceName(undefined)
+      setConnectNotice(
+        'Desktop mengakhiri sesi. Pindai QR baru dari Desktop Helper untuk melanjutkan.',
+      )
+      return
+    }
     if (event.type === 'desktop_status') {
       setDesktopStatus(event.status)
       setLastSeenAt(Date.now())
@@ -141,10 +151,12 @@ function AppInner() {
     onEcho: applyEcho,
   })
 
-  // Fresh preview per session.
+  // Fresh preview and released modifiers per session: a latched Ctrl/Alt from
+  // the old session must not leak into the next one.
   useEffect(() => {
     setPreview({ text: '', cursor: 0 })
-  }, [sessionId])
+    clearModifiers()
+  }, [sessionId, clearModifiers])
 
   // First-time onboarding: show the touchpad gesture guide once a session
   // connects. Dismissed by closing the sheet.
@@ -225,7 +237,13 @@ function AppInner() {
   if (!sessionId) {
     return (
       <div className="connect-outer">
-        <ConnectScreen onConnect={(id) => setSessionId(id)} />
+        <ConnectScreen
+          notice={connectNotice}
+          onConnect={(id) => {
+            setConnectNotice(null)
+            setSessionId(id)
+          }}
+        />
         <InstallPrompt />
       </div>
     )

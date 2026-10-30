@@ -51,6 +51,7 @@ export type BroadcastPayload =
   | DesktopStatusPayload
   | PresencePayload
   | ClientPausePayload
+  | SessionEndedPayload
 
 /** Local echo of what would appear on the PC, for the on-screen preview. */
 export type EchoToken =
@@ -91,6 +92,15 @@ export interface PresencePayload {
   eventId: string
   sessionId: string
   clientId: string
+  timestamp: string
+}
+
+/** Desktop closed the session (new session or app quit). The phone must
+ * leave the old channel and return to pairing. */
+export interface SessionEndedPayload {
+  type: 'session_ended'
+  eventId: string
+  sessionId: string
   timestamp: string
 }
 

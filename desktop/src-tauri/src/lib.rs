@@ -73,7 +73,14 @@ fn setup_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                 let _ = app::toggle_pause(app.clone());
             }
             "quit" => {
-                app.exit(0);
+                // Let the phone know the session is gone before the process
+                // exits; give the broadcast a moment to leave the socket.
+                let handle = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    app::notify_session_end(&handle);
+                    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+                    handle.exit(0);
+                });
             }
             _ => {}
         })
