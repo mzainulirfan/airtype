@@ -67,10 +67,11 @@ export default function Keyboard({
 
   return (
     <div className={layer === 'nav' ? 'keyboard nav' : 'keyboard'}>
-      <div className="keyboard-toolbar">
+      <div className="keyboard-toolbar" role="group" aria-label="Pilih layer keyboard">
         <button
           type="button"
           className={layer === 'letters' || layer === 'nav' ? 'keyboard-chip active' : 'keyboard-chip'}
+          aria-pressed={layer === 'letters' || layer === 'nav'}
           onClick={() => onLayerChange('letters')}
         >
           ABC
@@ -80,6 +81,7 @@ export default function Keyboard({
           className={
             layer === 'symbols' || layer === 'extended' ? 'keyboard-chip active' : 'keyboard-chip'
           }
+          aria-pressed={layer === 'symbols' || layer === 'extended'}
           onClick={() => onLayerChange('symbols')}
         >
           ?123
@@ -87,6 +89,7 @@ export default function Keyboard({
         <button
           type="button"
           className={layer === 'fn' ? 'keyboard-chip active' : 'keyboard-chip'}
+          aria-pressed={layer === 'fn'}
           onClick={() => onLayerChange('fn')}
         >
           PC

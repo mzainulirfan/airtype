@@ -111,15 +111,31 @@ export default function QrScanner({ onResult, onClose }: QrScannerProps) {
 
   return (
     <div className="scanner-overlay">
+      <div className="scanner-header">
+        <div>
+          <h2>Pindai QR</h2>
+          <p>Arahkan kamera ke kode di layar desktop.</p>
+        </div>
+        <button type="button" className="scanner-close-icon" onClick={onClose} aria-label="Tutup">
+          ×
+        </button>
+      </div>
+
       <div className="scanner-box">
         <video ref={videoRef} className="scanner-video" playsInline muted />
         <canvas ref={canvasRef} className="scanner-canvas" />
         <div className="scanner-frame" aria-hidden="true" />
-        {error && <p className="scanner-error">{error}</p>}
-        {!error && <p className="scanner-hint">Arahkan kamera ke kode QR di desktop</p>}
+        {error ? (
+          <p className="scanner-error" role="alert">
+            {error}
+          </p>
+        ) : (
+          <p className="scanner-hint">Kode QR akan terdeteksi otomatis</p>
+        )}
       </div>
+
       <button type="button" className="scanner-close" onClick={onClose}>
-        Tutup
+        Tutup kamera
       </button>
     </div>
   )

@@ -36,7 +36,7 @@ const STORAGE_KEY = 'airtype_settings'
 const DEFAULTS: Settings = {
   haptic: true,
   keySize: 'default',
-  theme: 'system',
+  theme: 'light',
   autoReturnToLetters: true,
   strictMode: false,
   cursorSensitivity: 2,
@@ -85,6 +85,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         settings.theme === 'system' ? (mq.matches ? 'light' : 'dark') : settings.theme
       document.documentElement.dataset.theme = effective
       document.documentElement.dataset.keySize = settings.keySize
+      document.documentElement.style.colorScheme = effective
+      document
+        .querySelector('meta[name="theme-color"]')
+        ?.setAttribute('content', effective === 'light' ? '#eef3f9' : '#0b1220')
     }
     apply()
     mq.addEventListener('change', apply)

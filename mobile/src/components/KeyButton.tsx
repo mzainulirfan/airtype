@@ -30,6 +30,7 @@ export default function KeyButton({
 }: KeyButtonProps) {
   const [pressed, setPressed] = useState(false)
   const label = keyLabel(def, shift, caps)
+  const visualLabel = def.code === 'Space' ? 'spasi' : label
   const className = [
     'key',
     def.kind,
@@ -114,9 +115,10 @@ export default function KeyButton({
       onPointerLeave={handlePointerUp}
       onPointerCancel={handlePointerUp}
       onContextMenu={(e) => e.preventDefault()}
+      aria-label={def.code === 'Backspace' ? 'Hapus' : def.code === 'Enter' ? 'Enter' : undefined}
     >
       {def.kind === 'char' && <span className="key-peek">{label}</span>}
-      <span>{label}</span>
+      <span>{visualLabel}</span>
     </button>
   )
 }

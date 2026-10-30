@@ -1,11 +1,10 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import {
   useSettings,
   type CursorSensitivity,
   type KeySize,
   type ThemePreference,
 } from '../context/SettingsContext'
-import { getChannelName } from '../lib/supabase'
 import { QUICK_ACTIONS } from '../lib/chords'
 import type { ConnectionStatus } from '../types'
 import TemplateManager from './TemplateManager'
@@ -50,6 +49,7 @@ function Segmented<T extends string | number>({
           key={opt.value}
           type="button"
           className={value === opt.value ? 'active' : ''}
+          aria-pressed={value === opt.value}
           onClick={() => onChange(opt.value)}
         >
           {opt.label}
@@ -73,9 +73,19 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean
   )
 }
 
-function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+function Row({
+  label,
+  hint,
+  stack,
+  children,
+}: {
+  label: string
+  hint?: string
+  stack?: boolean
+  children: ReactNode
+}) {
   return (
-    <div className="settings-row">
+    <div className={stack ? 'settings-row stacked' : 'settings-row'}>
       <div className="settings-row-label">
         <span>{label}</span>
         {hint && <small>{hint}</small>}
@@ -115,138 +125,187 @@ export default function SettingsPanel({
   onDisconnect,
 }: SettingsPanelProps) {
   const { settings, update } = useSettings()
+  const [copied, setCopied] = useState(false)
 
   const statusText = paused
     ? 'Dijeda'
     : desktopStatus === 'connected'
       ? 'Terhubung'
       : STATUS_LABEL[connectionStatus]
+  const shortSession =
+    sessionId.length > 18 ? `${sessionId.slice(0, 8)}…${sessionId.slice(-6)}` : sessionId
+
+  const copySession = async () => {
+    try {
+      await navigator.clipboard.writeText(sessionId)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      /* clipboard unavailable */
+    }
+  }
 
   return (
     <div className="settings-backdrop" onClick={onClose}>
-      <div className="settings-panel" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="settings-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Pengaturan"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="settings-header">
-          <h2>Pengaturan</h2>
+          <div>
+            <h2>Pengaturan</h2>
+            <p>Sesuaikan AirType di perangkat ini</p>
+          </div>
           <button type="button" className="close" onClick={onClose} aria-label="Tutup">
             ×
           </button>
         </div>
 
         <div className="settings-body">
-          <section className="settings-section">
-            <h3 className="settings-section-title">Info Koneksi</h3>
-            <InfoRow label="Perangkat" value={deviceName ?? 'Perangkat tidak dikenal'} />
-            <InfoRow label="Status" value={statusText} />
-            <InfoRow label="Terakhir menerima data" value={timeAgo(lastSeenAt)} />
-            <InfoRow label="ID Sesi" value={getChannelName(sessionId)} />
-            <div className="settings-section-hint" style={{ marginTop: 6 }}>
-              Jika status "Terhubung" tetapi tidak ada respons dari PC (koneksi
-              bisa "macet" diam-diam), tekan tombol di bawah untuk menyambung
-              ulang. Aplikasi juga otomatis mendeteksi masalah ini.
+          <section className="settings-group">
+            <h3 className="settings-group-title">Koneksi</h3>
+            <div className="settings-card">
+              <div className="conn-summary">
+                <span className={`conn-dot ${paused ? 'paused' : connectionStatus}`} />
+                <div className="conn-summary-text">
+                  <strong>{statusText}</strong>
+                  <span>{deviceName ?? 'Perangkat tidak dikenal'}</span>
+                </div>
+              </div>
+              <InfoRow label="Terakhir aktif" value={timeAgo(lastSeenAt)} />
+              <div className="info-row session-row">
+                <span className="info-row-label">ID sesi</span>
+                <span className="session-id">
+                  <code title={sessionId}>{shortSession}</code>
+                  <button
+                    type="button"
+                    className="copy-id-btn"
+                    onClick={copySession}
+                    aria-label="Salin ID sesi"
+                  >
+                    {copied ? 'Tersalin' : 'Salin'}
+                  </button>
+                </span>
+              </div>
             </div>
-            <button type="button" className="reconnect-btn" onClick={onReconnect}>
+            <p className="settings-section-hint">
+              Status terlihat terhubung tetapi PC tidak merespons? Sambungkan ulang.
+            </p>
+            <button type="button" className="settings-action" onClick={onReconnect}>
               Sambungkan ulang
             </button>
           </section>
 
-          <section className="settings-section">
-            <Row label="Tampilkan pratinjau ketikan" hint="Pratinjau teks di atas touchpad">
-              <Switch
-                checked={settings.showTypingPreview}
-                onChange={(v) => update({ showTypingPreview: v })}
-              />
-            </Row>
-            <Row label="Getar (haptik)" hint="Getaran halus saat tombol ditekan">
-              <Switch checked={settings.haptic} onChange={(v) => update({ haptic: v })} />
-            </Row>
-
-            <Row label="Ukuran tombol">
-              <Segmented<KeySize>
-                options={[
-                  { value: 'small', label: 'Kecil' },
-                  { value: 'default', label: 'Sedang' },
-                  { value: 'large', label: 'Besar' },
-                ]}
-                value={settings.keySize}
-                onChange={(v) => update({ keySize: v })}
-              />
-            </Row>
-
-            <Row label="Tema">
-              <Segmented<ThemePreference>
-                options={[
-                  { value: 'system', label: 'Sistem' },
-                  { value: 'light', label: 'Terang' },
-                  { value: 'dark', label: 'Gelap' },
-                ]}
-                value={settings.theme}
-                onChange={(v) => update({ theme: v })}
-              />
-            </Row>
-
-            <Row label="Kembali ke huruf otomatis" hint="Setelah mengetik di layer simbol/Fn">
-              <Switch
-                checked={settings.autoReturnToLetters}
-                onChange={(v) => update({ autoReturnToLetters: v })}
-              />
-            </Row>
-
-            <Row label="Mode tombol ketat" hint="Kirim ketukan asli alih-alih teks cepat (untuk game)">
-              <Switch checked={settings.strictMode} onChange={(v) => update({ strictMode: v })} />
-            </Row>
-
-            <Row label="Sensitivitas kursor" hint="Kecepatan gerak kursor & scroll touchpad">
-              <Segmented<CursorSensitivity>
-                options={[
-                  { value: 1, label: 'Rendah' },
-                  { value: 1.5, label: 'Sedang' },
-                  { value: 2, label: 'Tinggi' },
-                ]}
-                value={settings.cursorSensitivity}
-                onChange={(v) => update({ cursorSensitivity: v })}
-              />
-            </Row>
-          </section>
-
-          <section className="settings-section">
-            <h3 className="settings-section-title">Pintasan Favorit</h3>
-            <p className="settings-section-hint">Pintasan yang tampil di baris utama.</p>
-            <div className="fav-grid">
-              {QUICK_ACTIONS.map((chord) => {
-                const active = settings.favoriteShortcuts.includes(chord.label)
-                return (
-                  <button
-                    key={chord.label}
-                    type="button"
-                    className={`fav-chip ${active ? 'active' : ''}`}
-                    onClick={() => {
-                      const next = active
-                        ? settings.favoriteShortcuts.filter((l) => l !== chord.label)
-                        : [...settings.favoriteShortcuts, chord.label]
-                      update({ favoriteShortcuts: next })
-                    }}
-                  >
-                    {chord.label}
-                  </button>
-                )
-              })}
+          <section className="settings-group">
+            <h3 className="settings-group-title">Ketikan</h3>
+            <div className="settings-card">
+              <Row label="Pratinjau ketikan" hint="Tampilkan teks di atas touchpad">
+                <Switch
+                  checked={settings.showTypingPreview}
+                  onChange={(v) => update({ showTypingPreview: v })}
+                />
+              </Row>
+              <Row label="Getar (haptik)" hint="Getaran halus saat tombol ditekan">
+                <Switch checked={settings.haptic} onChange={(v) => update({ haptic: v })} />
+              </Row>
+              <Row label="Kembali ke huruf otomatis" hint="Setelah memakai layer PC atau navigasi">
+                <Switch
+                  checked={settings.autoReturnToLetters}
+                  onChange={(v) => update({ autoReturnToLetters: v })}
+                />
+              </Row>
+              <Row label="Mode tombol ketat" hint="Kirim ketukan asli, cocok untuk game">
+                <Switch
+                  checked={settings.strictMode}
+                  onChange={(v) => update({ strictMode: v })}
+                />
+              </Row>
+              <Row label="Sensitivitas kursor" hint="Kecepatan kursor dan scroll" stack>
+                <Segmented<CursorSensitivity>
+                  options={[
+                    { value: 1, label: 'Rendah' },
+                    { value: 1.5, label: 'Sedang' },
+                    { value: 2, label: 'Tinggi' },
+                  ]}
+                  value={settings.cursorSensitivity}
+                  onChange={(v) => update({ cursorSensitivity: v })}
+                />
+              </Row>
             </div>
           </section>
 
-          <section className="settings-section">
-            <h3 className="settings-section-title">Template Teks</h3>
-            <p className="settings-section-hint">
-              Teks berulang yang bisa disisipkan sekali ketuk dari tombol &ldquo;T+&rdquo; di
-              samping baris pintasan.
-            </p>
-            <TemplateManager />
+          <section className="settings-group">
+            <h3 className="settings-group-title">Tampilan</h3>
+            <div className="settings-card">
+              <Row label="Ukuran tombol" stack>
+                <Segmented<KeySize>
+                  options={[
+                    { value: 'small', label: 'Kecil' },
+                    { value: 'default', label: 'Sedang' },
+                    { value: 'large', label: 'Besar' },
+                  ]}
+                  value={settings.keySize}
+                  onChange={(v) => update({ keySize: v })}
+                />
+              </Row>
+              <Row label="Tema" stack>
+                <Segmented<ThemePreference>
+                  options={[
+                    { value: 'system', label: 'Sistem' },
+                    { value: 'light', label: 'Terang' },
+                    { value: 'dark', label: 'Gelap' },
+                  ]}
+                  value={settings.theme}
+                  onChange={(v) => update({ theme: v })}
+                />
+              </Row>
+            </div>
           </section>
 
-          <section className="settings-section">
-            <button type="button" className="disconnect-btn" onClick={onDisconnect}>
-              Putuskan koneksi
-            </button>
+          <section className="settings-group">
+            <h3 className="settings-group-title">Pintasan Favorit</h3>
+            <div className="settings-card settings-card-padded">
+              <p className="settings-section-hint">Pintasan yang tampil di baris utama.</p>
+              <div className="fav-grid">
+                {QUICK_ACTIONS.map((chord) => {
+                  const active = settings.favoriteShortcuts.includes(chord.label)
+                  return (
+                    <button
+                      key={chord.label}
+                      type="button"
+                      className={`fav-chip ${active ? 'active' : ''}`}
+                      aria-pressed={active}
+                      onClick={() => {
+                        const next = active
+                          ? settings.favoriteShortcuts.filter((l) => l !== chord.label)
+                          : [...settings.favoriteShortcuts, chord.label]
+                        update({ favoriteShortcuts: next })
+                      }}
+                    >
+                      {chord.label}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
           </section>
+
+          <section className="settings-group">
+            <h3 className="settings-group-title">Templat Teks</h3>
+            <div className="settings-card settings-card-padded">
+              <p className="settings-section-hint">
+                Teks berulang yang bisa disisipkan sekali ketuk dari tombol Templat.
+              </p>
+              <TemplateManager />
+            </div>
+          </section>
+
+          <button type="button" className="disconnect-btn" onClick={onDisconnect}>
+            Putuskan koneksi
+          </button>
         </div>
       </div>
     </div>

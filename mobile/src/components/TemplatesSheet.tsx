@@ -41,14 +41,14 @@ export default function TemplatesSheet({ onClose, onInsert }: TemplatesSheetProp
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet-panel" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-header">
-          <h2>Templates</h2>
+          <h2>Templat</h2>
           <button type="button" className="close" onClick={onClose} aria-label="Tutup">
             ×
           </button>
         </div>
         <div className="sheet-body">
           <section className="sheet-group">
-            <h3>Tempel dari Clipboard</h3>
+            <h3>Tempel dari clipboard</h3>
             <button
               type="button"
               className="paste-btn"
@@ -81,10 +81,10 @@ export default function TemplatesSheet({ onClose, onInsert }: TemplatesSheetProp
           </section>
 
           <section className="sheet-group">
-            <h3>Template Tersimpan</h3>
+            <h3>Templat tersimpan</h3>
             {settings.templates.length === 0 ? (
               <p className="settings-section-hint">
-                Belum ada template. Tambahkan di Pengaturan → Template Teks.
+                Belum ada templat. Tambahkan di Pengaturan → Templat Teks.
               </p>
             ) : (
               settings.templates.map((t) => (

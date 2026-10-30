@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import type { PointerEvent } from 'react'
 import type { GestureName, MouseButton } from '../types'
 
@@ -65,9 +65,11 @@ export default function Touchpad({
   const gestureLockedRef = useRef(false)
   const gestureFiredRef = useRef(false)
   const last2TapRef = useRef(0)
+  const [hasTouched, setHasTouched] = useState(false)
 
   const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault()
+    setHasTouched(true)
     surfaceRef.current?.setPointerCapture(e.pointerId)
     const map = pointersRef.current
     if (map.size === 0) {
@@ -279,16 +281,56 @@ export default function Touchpad({
   return (
     <div
       ref={surfaceRef}
-      className="touchpad"
+      className={`touchpad ${hasTouched ? 'is-touched' : ''}`}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
       onContextMenu={(e) => e.preventDefault()}
     >
-      <span className="touchpad-hint">
-        1 jari: cursor · 2 jari: scroll · cubit: zoom
+      <span className="touchpad-label" aria-hidden="true">
+        <svg
+          viewBox="0 0 24 24"
+          width="13"
+          height="13"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          aria-hidden="true"
+        >
+          <rect x="6.5" y="2.5" width="11" height="19" rx="5.5" />
+          <path d="M12 2.5v7" />
+          <path d="M12 12.5v2" />
+        </svg>
+        Touchpad
       </span>
+
+      <div className={`touchpad-watermark ${hasTouched ? 'is-hidden' : ''}`} aria-hidden="true">
+        <span className="touchpad-watermark-icon">
+          <svg
+            viewBox="0 0 24 24"
+            width="28"
+            height="28"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M9 11V6.5a1.5 1.5 0 0 1 3 0V11" />
+            <path d="M12 11V5.5a1.5 1.5 0 0 1 3 0V11" />
+            <path d="M15 11V7.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.4a6 6 0 0 1-4.6-2.2L4 15.3a1.6 1.6 0 0 1 2.5-2L9 15" />
+          </svg>
+        </span>
+        <strong>Sentuh &amp; geser</strong>
+        <span>Gerakkan kursor di PC</span>
+        <div className="touchpad-tips">
+          <span>1 jari gerak</span>
+          <span>Ketuk klik</span>
+          <span>2 jari scroll</span>
+        </div>
+      </div>
+
       {onHelp && (
         <button
           type="button"
@@ -298,9 +340,49 @@ export default function Touchpad({
           onPointerUp={(e) => e.stopPropagation()}
           onClick={onHelp}
         >
-          ?
+          <svg
+            viewBox="0 0 24 24"
+            width="15"
+            height="15"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            aria-hidden="true"
+          >
+            <circle cx="12" cy="12" r="9" />
+            <path d="M9.6 9.3a2.5 2.5 0 1 1 3.4 2.3c-.6.3-1 .8-1 1.5v.4" />
+            <path d="M12 17h.01" />
+          </svg>
         </button>
       )}
+
+      <button
+        type="button"
+        className="touchpad-rightclick"
+        aria-label="Klik kanan di PC"
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
+        onClick={() => {
+          setHasTouched(true)
+          onButton('down', 'right')
+          onButton('up', 'right')
+        }}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          width="13"
+          height="13"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          aria-hidden="true"
+        >
+          <rect x="6.5" y="2.5" width="11" height="19" rx="5.5" />
+          <path d="M12 2.5v7M12 9.5h5.5" />
+        </svg>
+        Kanan
+      </button>
     </div>
   )
 }

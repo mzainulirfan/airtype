@@ -60,8 +60,8 @@ export default function TemplateManager() {
     <div className="tpl-manager">
       {settings.templates.length === 0 && !formOpen && (
         <p className="settings-section-hint">
-          Belum ada template. Template = teks berulang (alamat, salam, kode, dll.) yang bisa
-          disisipkan sekali ketuk dari sheet Templates.
+          Belum ada templat. Templat = teks berulang (alamat, salam, kode, dll.) yang bisa
+          disisipkan sekali ketuk dari lembar Templat.
         </p>
       )}
 
@@ -93,7 +93,7 @@ export default function TemplateManager() {
           />
           <textarea
             className="tpl-input tpl-textarea"
-            placeholder="Isi teks template…"
+            placeholder="Isi teks templat…"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             maxLength={MAX_CONTENT}
@@ -117,7 +117,7 @@ export default function TemplateManager() {
         </div>
       ) : (
         <button type="button" className="tpl-add" onClick={startAdd}>
-          + Tambah template
+          + Tambah templat
         </button>
       )}
     </div>

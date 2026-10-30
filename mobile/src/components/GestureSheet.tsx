@@ -36,7 +36,7 @@ export default function GestureSheet({ onClose }: GestureSheetProps) {
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet-panel" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-header">
-          <h2>Cara Menggunakan Touchpad</h2>
+          <h2>Cara pakai touchpad</h2>
           <button type="button" className="close" onClick={onClose} aria-label="Tutup">
             ×
           </button>
