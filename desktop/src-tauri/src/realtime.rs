@@ -7,7 +7,13 @@ use tokio_tungstenite::tungstenite::Message;
 
 pub enum RealtimeCommand {
     Send(Value),
-    Stop,
+    /// Send a final broadcast, give the server a moment to fan it out, close
+    /// the socket and then acknowledge. Callers await the ack instead of
+    /// racing an abort, which could kill the task before the message left.
+    SendAndStop {
+        payload: Value,
+        ack: tokio::sync::oneshot::Sender<()>,
+    },
 }
 
 /// Spawn a background task that keeps a Supabase Realtime connection alive,
@@ -31,8 +37,24 @@ pub fn spawn_realtime(
                 break;
             }
             let delay = (retry * 2).min(30);
-            tokio::time::sleep(Duration::from_secs(delay)).await;
             retry += 1;
+            // While backing off there is no socket to talk to, but the caller
+            // of SendAndStop still wants its ack: answer it immediately so a
+            // session rotation is not stalled waiting on a dead connection.
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(delay);
+            loop {
+                tokio::select! {
+                    _ = tokio::time::sleep_until(deadline) => break,
+                    cmd = cmd_rx.recv() => match cmd {
+                        Some(RealtimeCommand::SendAndStop { ack, .. }) => {
+                            let _ = ack.send(());
+                            return;
+                        }
+                        Some(RealtimeCommand::Send(_)) => {}
+                        None => return,
+                    },
+                }
+            }
         }
     })
 }
@@ -142,8 +164,29 @@ async fn run_connection(
                             return false;
                         }
                     }
-                    Some(RealtimeCommand::Stop) => {
+                    Some(RealtimeCommand::SendAndStop { payload, ack }) => {
+                        let msg = json!({
+                            "topic": channel,
+                            "event": "broadcast",
+                            "payload": {
+                                "type": "broadcast",
+                                "event": "airtype",
+                                "payload": payload
+                            },
+                            "ref": null
+                        });
+                        let sent = sink
+                            .send(Message::Text(msg.to_string().into()))
+                            .await
+                            .is_ok();
+                        if sent {
+                            // Supabase fans broadcasts out asynchronously; a
+                            // close immediately after the send can win the race
+                            // and drop the message. Give it a moment to land.
+                            tokio::time::sleep(Duration::from_millis(250)).await;
+                        }
                         let _ = sink.send(Message::Close(None)).await;
+                        let _ = ack.send(());
                         return true;
                     }
                     None => return true,

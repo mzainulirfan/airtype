@@ -244,15 +244,14 @@ pub fn init_app(app: AppHandle) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn new_session(app: AppHandle) -> Result<SessionInfo, String> {
+pub async fn new_session(app: AppHandle) -> Result<SessionInfo, String> {
+    // Send session_ended on the old channel and wait until it is actually on
+    // the wire before tearing the connection down. Rotating first used to
+    // abort the realtime task while the broadcast was still queued, so phones
+    // stayed on the keyboard screen.
+    notify_session_end(&app).await;
+
     let state = app.state::<AppState>();
-    // Send session_ended on the old channel before closing it, so the phone
-    // leaves keyboard mode and shows the pairing screen again.
-    notify_session_end(&app);
-    // Stop old realtime connection cleanly.
-    if let Some(tx) = state.inner.cmd_tx.lock().unwrap_or_else(|e| e.into_inner()).take() {
-        let _ = tx.try_send(RealtimeCommand::Stop);
-    }
     *state.inner.session_id.lock().unwrap_or_else(|e| e.into_inner()) = generate_session_id();
     state.inner.dedup.lock().unwrap_or_else(|e| e.into_inner()).clear();
 
@@ -419,24 +418,44 @@ fn payload_client_id(value: &Value) -> &str {
 
 /// Tell linked phones the session is over before rotating or quitting.
 /// Without this they keep the old channel and stay in keyboard mode forever.
-pub fn notify_session_end(app: &AppHandle) {
-    let state = app.state::<AppState>();
-    let session_id = state
-        .inner
-        .session_id
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .clone();
+/// Resolves once the broadcast has left the socket (or the realtime task is
+/// gone), so callers must not abort the connection before awaiting it.
+pub async fn notify_session_end(app: &AppHandle) {
+    let (session_id, tx) = {
+        let state = app.state::<AppState>();
+        let session_id = state
+            .inner
+            .session_id
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        let tx = state
+            .inner
+            .cmd_tx
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        (session_id, tx)
+    };
+    let Some(tx) = tx else {
+        return;
+    };
     let payload = json!({
         "type": "session_ended",
         "eventId": format!("ended-{}", chrono_now()),
         "sessionId": session_id,
         "timestamp": chrono_now(),
     });
-    let cmd_tx = state.inner.cmd_tx.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some(tx) = cmd_tx.as_ref() {
-        let _ = tx.try_send(RealtimeCommand::Send(payload));
+    let (ack_tx, ack_rx) = tokio::sync::oneshot::channel();
+    if tx
+        .send(RealtimeCommand::SendAndStop { payload, ack: ack_tx })
+        .await
+        .is_err()
+    {
+        return;
     }
+    // A socket that never acknowledges must not block rotation or quit.
+    let _ = tokio::time::timeout(Duration::from_secs(2), ack_rx).await;
 }
 
 /// Broadcast `desktop_status` over the session channel so mobile clients see it.
