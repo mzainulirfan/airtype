@@ -18,7 +18,6 @@ export interface KeyboardOptions {
   paused?: boolean
   haptic?: boolean
   strictMode?: boolean
-  onLatency?: (ms: number) => void
   /** Local echo of what would appear on the PC, for the on-screen preview. */
   onEcho?: (token: EchoToken) => void
 }
@@ -41,8 +40,9 @@ const CHORD_HOLD_MS = 250
 /** How long to keep the modifier held after the key tap before releasing. */
 const CHORD_RELEASE_MS = 150
 
-/** How often to flush accumulated mouse-move deltas (ms). */
-const MOUSE_MOVE_FLUSH_MS = 16
+/** How often to flush accumulated mouse-move deltas (ms). 33 ms matches a
+ * 30 fps touch stream and halves the broadcast rate without visible lag. */
+const MOUSE_MOVE_FLUSH_MS = 33
 
 /** Map a non-text special key to its preview token. Only for keys that
  * visibly move the typed text (space/enter/tab/backspace/delete/navigation). */
@@ -84,7 +84,6 @@ export function useKeyboard({
   paused = false,
   haptic = true,
   strictMode = false,
-  onLatency,
   onEcho,
 }: KeyboardOptions) {
   const [modifiers, setModifiers] = useState<Modifiers>(initialModifiers)
@@ -116,7 +115,7 @@ export function useKeyboard({
     if (bufferRef.current.length === 0) return
     const text = bufferRef.current.join('')
     bufferRef.current = []
-    const sent = sendRef.current({
+    sendRef.current({
       type: 'type_text',
       sessionId,
       eventId: nextEventId(),
@@ -124,8 +123,7 @@ export function useKeyboard({
       text,
       timestamp: new Date().toISOString(),
     })
-    if (sent) onLatency?.(0)
-  }, [sessionId, clientId, onLatency])
+  }, [sessionId, clientId])
 
   const clearChordTimers = useCallback(() => {
     chordTimersRef.current.forEach((t) => clearTimeout(t))

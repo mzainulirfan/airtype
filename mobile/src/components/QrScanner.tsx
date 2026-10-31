@@ -8,6 +8,9 @@ interface QrScannerProps {
 
 const SESSION_RE = /^[0-9a-f]{32}$/
 const SCAN_WIDTH = 480
+/** Decoding every video frame drains batteries; ~5 scans/s is plenty to lock
+ * onto a QR code the user is holding still. */
+const SCAN_INTERVAL_MS = 200
 
 function extractSession(raw: string): string | null {
   const candidate = raw.trim()
@@ -29,7 +32,7 @@ export default function QrScanner({ onResult, onClose }: QrScannerProps) {
 
   useEffect(() => {
     let stream: MediaStream | null = null
-    let raf = 0
+    let timer: ReturnType<typeof setTimeout> | null = null
     let cancelled = false
     let detector: any = null
 
@@ -69,12 +72,12 @@ export default function QrScanner({ onResult, onClose }: QrScannerProps) {
           return
         }
       }
-      raf = requestAnimationFrame(() => detect(video))
+      if (!cancelled) timer = setTimeout(() => detect(video), SCAN_INTERVAL_MS)
     }
 
     const stop = () => {
       cancelled = true
-      cancelAnimationFrame(raf)
+      if (timer) clearTimeout(timer)
       stream?.getTracks().forEach((t) => t.stop())
       stream = null
     }
@@ -99,7 +102,7 @@ export default function QrScanner({ onResult, onClose }: QrScannerProps) {
         }
         video.srcObject = stream
         await video.play()
-        raf = requestAnimationFrame(() => detect(video))
+        timer = setTimeout(() => detect(video), SCAN_INTERVAL_MS)
       } catch {
         setError('Tidak dapat mengakses kamera. Izinkan akses kamera, atau masukkan kode manual.')
       }

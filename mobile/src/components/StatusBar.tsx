@@ -5,7 +5,7 @@ export type LandscapeMode = 'touchpad' | 'keyboard'
 interface StatusBarProps {
   status: ConnectionStatus
   paused: boolean
-  desktopStatus: 'waiting_pairing' | 'connected' | 'paused' | null
+  desktopStatus: 'waiting_pairing' | 'waiting_approval' | 'connected' | 'paused' | null
   deviceName?: string
   mode?: LandscapeMode
   onToggleMode?: () => void
@@ -28,6 +28,7 @@ function statusSubtitle(
 ): string {
   if (paused) return 'Ketikan dihentikan sementara'
   if (status !== 'connected') return 'Pastikan Desktop Helper terbuka'
+  if (desktopStatus === 'waiting_approval') return 'Menunggu persetujuan desktop'
   if (desktopStatus === 'waiting_pairing') return 'Desktop menunggu pairing'
   if (desktopStatus === 'paused') return 'Desktop sedang dijeda'
   return deviceName || 'Desktop siap menerima ketikan'

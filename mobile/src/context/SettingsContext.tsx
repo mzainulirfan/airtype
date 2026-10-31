@@ -40,7 +40,7 @@ const DEFAULTS: Settings = {
   autoReturnToLetters: true,
   strictMode: false,
   cursorSensitivity: 2,
-  showTypingPreview: true,
+  showTypingPreview: false,
   seenGestureGuide: false,
   favoriteShortcuts: ['Esc', 'Ctrl+C', 'Ctrl+V', 'Alt+Tab', 'Ctrl+Z'],
   templates: [],

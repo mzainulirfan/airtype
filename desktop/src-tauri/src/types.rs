@@ -95,11 +95,19 @@ pub struct Stats {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct PendingClient {
+    pub client_id: String,
+    pub requested_at_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct UiSnapshot {
     pub session: SessionInfo,
     pub presence: String,
     pub paused: bool,
     pub client: Option<ClientInfo>,
+    pub pending: Option<PendingClient>,
     pub stats: Stats,
     pub history: Vec<HistoryItem>,
     pub hostname: String,

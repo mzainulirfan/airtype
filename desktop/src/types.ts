@@ -3,6 +3,7 @@ export type Status =
   | 'creating_session'
   | 'subscribing'
   | 'waiting_pairing'
+  | 'waiting_approval'
   | 'connected'
   | 'paused'
   | 'reconnecting'
@@ -29,6 +30,11 @@ export interface ClientInfo {
   approximate: boolean
 }
 
+export interface PendingClient {
+  clientId: string
+  requestedAtMs: number
+}
+
 export interface Stats {
   chars: number
   keyEvents: number
@@ -42,6 +48,7 @@ export interface UiSnapshot {
   presence: string
   paused: boolean
   client: ClientInfo | null
+  pending: PendingClient | null
   stats: Stats
   history: HistoryItem[]
   hostname: string

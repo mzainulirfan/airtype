@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod crypto;
 mod keymap;
 mod keyboard;
 mod mouse;
@@ -44,6 +45,9 @@ pub fn run() {
             app::init_app,
             app::new_session,
             app::toggle_pause,
+            app::set_auto_pause,
+            app::clear_history,
+            app::resolve_pairing,
             app::get_ui_snapshot,
         ])
         .run(tauri::generate_context!())

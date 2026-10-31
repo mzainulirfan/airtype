@@ -14,8 +14,10 @@ export default defineConfig({
         short_name: 'AirType',
         description:
           'Jadikan Smartphone Keyboard Nirkabel untuk Desktop',
-        theme_color: '#0f172a',
-        background_color: '#0f172a',
+        // Must match the app's light-first shell in index.html/index.css so the
+        // install splash and browser chrome do not flash a dark navy frame.
+        theme_color: '#eef3f9',
+        background_color: '#eef3f9',
         display: 'standalone',
         start_url: '/connect',
         icons: [

@@ -19,12 +19,48 @@ import { GESTURE_CHORDS } from './lib/chords'
 import type { LayerId } from './lib/keys'
 import type { BroadcastPayload, EchoToken, GestureName } from './types'
 
-const CLIENT_ID = `mobile-${Math.random().toString(36).slice(2, 10)}`
+const CLIENT_ID_KEY = 'airtype_client_id'
 const SESSION_STORAGE_KEY = 'airtype_session'
+
+// A stable id lets the desktop remember an approved phone across reloads
+// instead of asking for permission again on every re-pair of the same session.
+function loadClientId(): string {
+  try {
+    const stored = localStorage.getItem(CLIENT_ID_KEY)
+    if (stored && /^mobile-[a-z0-9]{8,40}$/.test(stored)) return stored
+  } catch {
+    /* storage unavailable */
+  }
+  const random =
+    typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replace(/-/g, '')
+      : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+  const id = `mobile-${random.slice(0, 16)}`
+  try {
+    localStorage.setItem(CLIENT_ID_KEY, id)
+  } catch {
+    /* storage unavailable */
+  }
+  return id
+}
+
+const CLIENT_ID = loadClientId()
+
+type ApprovalState = 'idle' | 'pending'
 
 interface PreviewState {
   text: string
   cursor: number
+}
+
+/** Keep the local echo preview bounded so long sessions cannot grow the
+ * render tree without limit. Older characters scroll out of view anyway. */
+const MAX_PREVIEW_CHARS = 2000
+
+function capPreview(next: PreviewState): PreviewState {
+  if (next.text.length <= MAX_PREVIEW_CHARS) return next
+  const drop = next.text.length - MAX_PREVIEW_CHARS
+  return { text: next.text.slice(drop), cursor: Math.max(0, next.cursor - drop) }
 }
 
 function applyPreviewToken(prev: PreviewState, token: EchoToken): PreviewState {
@@ -92,6 +128,7 @@ function AppInner() {
     return null
   })
   const [paused, setPaused] = useState(false)
+  const [approval, setApproval] = useState<ApprovalState>('idle')
   const [connectNotice, setConnectNotice] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [keyboardLayer, setKeyboardLayer] = useState<LayerId>('letters')
@@ -99,7 +136,7 @@ function AppInner() {
   const [showGestureGuide, setShowGestureGuide] = useState(false)
   const [landscapeMode, setLandscapeMode] = useState<LandscapeMode>('keyboard')
   const [desktopStatus, setDesktopStatus] = useState<
-    'waiting_pairing' | 'connected' | 'paused' | null
+    'waiting_pairing' | 'waiting_approval' | 'connected' | 'paused' | null
   >(null)
   const [deviceName, setDeviceName] = useState<string | undefined>(undefined)
   const [lastSeenAt, setLastSeenAt] = useState<number | null>(null)
@@ -116,6 +153,26 @@ function AppInner() {
       )
       return
     }
+    // The desktop asks this device for permission before accepting its input.
+    if (event.type === 'approval_required') {
+      if (event.clientId === CLIENT_ID) setApproval('pending')
+      return
+    }
+    if (event.type === 'pairing_result') {
+      if (event.clientId !== CLIENT_ID) return
+      if (event.approved) {
+        setApproval('idle')
+        return
+      }
+      setApproval('idle')
+      setSessionId(null)
+      setDesktopStatus(null)
+      setDeviceName(undefined)
+      setConnectNotice(
+        'Desktop menolak permintaan pairing. Pindai QR terbaru dari Desktop Helper lalu coba lagi.',
+      )
+      return
+    }
     if (event.type === 'desktop_status') {
       setDesktopStatus(event.status)
       setLastSeenAt(Date.now())
@@ -123,10 +180,29 @@ function AppInner() {
     }
   }, [])
 
-  const { status, send, reconnect } = useRealtime(client, sessionId, CLIENT_ID, handleMessage)
+  // The desktop stopped answering entirely (crashed, quit, or rotated the
+  // session without us seeing session_ended). Reconnecting forever would keep
+  // a dead keyboard on screen, so drop back to pairing.
+  const handleExpired = useCallback(() => {
+    setApproval('idle')
+    setSessionId(null)
+    setDesktopStatus(null)
+    setDeviceName(undefined)
+    setConnectNotice(
+      'Desktop tidak merespons. Pastikan AirType Helper terbuka, lalu pindai QR baru.',
+    )
+  }, [])
+
+  const { status, send, reconnect } = useRealtime(
+    client,
+    sessionId,
+    CLIENT_ID,
+    handleMessage,
+    handleExpired,
+  )
 
   const applyEcho = useCallback((token: EchoToken) => {
-    setPreview((prev) => applyPreviewToken(prev, token))
+    setPreview((prev) => capPreview(applyPreviewToken(prev, token)))
   }, [])
 
   const {
@@ -145,11 +221,25 @@ function AppInner() {
     sessionId: sessionId ?? '',
     clientId: CLIENT_ID,
     send,
-    paused,
+    paused: paused || approval === 'pending',
     haptic: settings.haptic,
     strictMode: settings.strictMode,
     onEcho: applyEcho,
   })
+
+  // A fresh session always starts unapproved; the desktop will say otherwise.
+  useEffect(() => {
+    setApproval('idle')
+  }, [sessionId])
+
+  // The session id is a bearer secret: keep it out of the address bar, shared
+  // links and browser history once it has been handed to the app.
+  useEffect(() => {
+    const url = new URL(window.location.href)
+    if (!url.searchParams.has('session')) return
+    url.searchParams.delete('session')
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`)
+  }, [])
 
   // Fresh preview and released modifiers per session: a latched Ctrl/Alt from
   // the old session must not leak into the next one.
@@ -161,10 +251,16 @@ function AppInner() {
   // First-time onboarding: show the touchpad gesture guide once a session
   // connects. Dismissed by closing the sheet.
   useEffect(() => {
-    if (sessionId && !settings.seenGestureGuide) {
+    if (sessionId && approval === 'idle' && !settings.seenGestureGuide) {
       setShowGestureGuide(true)
     }
-  }, [sessionId, settings.seenGestureGuide])
+  }, [sessionId, approval, settings.seenGestureGuide])
+
+  // The approval prompt takes priority over any open sheet: the user has to
+  // accept the device before the keyboard can be used anyway.
+  useEffect(() => {
+    if (approval === 'pending') setShowGestureGuide(false)
+  }, [approval])
 
   const handleCloseGestureGuide = useCallback(() => {
     setShowGestureGuide(false)
@@ -186,8 +282,10 @@ function AppInner() {
   }, [sessionId])
 
   const handleDisconnect = useCallback(() => {
+    setApproval('idle')
     setSessionId(null)
   }, [])
+
 
   const handleTogglePause = useCallback(
     // The pause state lives on the desktop; the phone only relays the user's
@@ -232,7 +330,7 @@ function AppInner() {
     [handleChord],
   )
 
-  useWakeLock(Boolean(sessionId) && !paused)
+  useWakeLock(Boolean(sessionId) && !paused && approval === 'idle')
 
   if (!sessionId) {
     return (
@@ -296,7 +394,9 @@ function AppInner() {
           onRelease={release}
         />
       </div>
-      {showGestureGuide && <GestureSheet onClose={handleCloseGestureGuide} />}
+      {showGestureGuide && approval !== 'pending' && (
+        <GestureSheet onClose={handleCloseGestureGuide} />
+      )}
       {showSettings && (
         <SettingsPanel
           onClose={() => setShowSettings(false)}
@@ -309,6 +409,29 @@ function AppInner() {
           onReconnect={reconnect}
           onDisconnect={handleDisconnect}
         />
+      )}
+      {approval === 'pending' && (
+        <div
+          className="approval-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="approval-title"
+        >
+          <div className="approval-card">
+            <span className="approval-spinner" aria-hidden="true" />
+            <h2 id="approval-title">Menunggu persetujuan desktop</h2>
+            <p>
+              Buka <strong>AirType Helper</strong> di komputer, lalu tekan{' '}
+              <strong>Terima</strong> pada permintaan pairing.
+            </p>
+            <p className="approval-hint">
+              Hanya setujui jika kamu sendiri yang memindai QR ini.
+            </p>
+            <button type="button" className="approval-cancel" onClick={handleDisconnect}>
+              Putuskan
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )

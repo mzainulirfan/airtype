@@ -81,6 +81,24 @@
             </span>
           </div>
 
+          <div
+            id="pairing-request"
+            class="pairing-request hidden"
+            role="alertdialog"
+            aria-labelledby="pairing-request-title"
+          >
+            <div class="request-copy">
+              <p class="eyebrow">Permintaan pairing</p>
+              <h3 id="pairing-request-title">Ada perangkat ingin terhubung</h3>
+              <p class="muted">Setujui hanya jika kamu sendiri yang memindai kode QR ini.</p>
+              <code id="pairing-request-id" class="request-id">—</code>
+            </div>
+            <div class="request-actions">
+              <button id="pairing-approve" type="button" class="btn primary">Terima</button>
+              <button id="pairing-deny" type="button" class="btn ghost">Tolak</button>
+            </div>
+          </div>
+
           <div class="qr-stage">
             <div class="qr-wrap">
               <div id="qr-code" class="qr-code hidden" aria-label="QR pairing"></div>
@@ -101,6 +119,20 @@
                 <path d="M15 5.5A2.5 2.5 0 0 0 12.5 3h-7A2.5 2.5 0 0 0 3 5.5v7A2.5 2.5 0 0 0 5.5 15" />
               </svg>
             </button>
+          </div>
+
+          <div class="session-row setting-row">
+            <span class="label" id="auto-pause-label">Jeda otomatis</span>
+            <select
+              id="auto-pause"
+              class="setting-select"
+              aria-labelledby="auto-pause-label"
+            >
+              <option value="0">Nonaktif</option>
+              <option value="30000">30 detik</option>
+              <option value="60000">1 menit</option>
+              <option value="300000">5 menit</option>
+            </select>
           </div>
 
           <details class="pair-more">
@@ -200,7 +232,12 @@
         <section class="card activity" id="activity-card">
           <div class="activity-head">
             <h2>Aktivitas</h2>
-            <span id="activity-count" class="label">0 entri</span>
+            <div class="activity-tools">
+              <span id="activity-count" class="label">0 entri</span>
+              <button id="clear-history" type="button" class="clear-history-btn" hidden>
+                Bersihkan
+              </button>
+            </div>
           </div>
           <div id="history" class="history"></div>
         </section>

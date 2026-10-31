@@ -52,6 +52,8 @@ export type BroadcastPayload =
   | PresencePayload
   | ClientPausePayload
   | SessionEndedPayload
+  | ApprovalRequiredPayload
+  | PairingResultPayload
 
 /** Local echo of what would appear on the PC, for the on-screen preview. */
 export type EchoToken =
@@ -82,8 +84,37 @@ export interface DesktopStatusPayload {
   type: 'desktop_status'
   eventId: string
   sessionId: string
-  status: 'waiting_pairing' | 'connected' | 'paused'
+  status: 'waiting_pairing' | 'waiting_approval' | 'connected' | 'paused'
   deviceName?: string
+  /** Desktop advertises end-to-end encryption support (legacy builds omit it). */
+  e2e?: number
+  timestamp: string
+}
+
+/** Encrypted wire envelope: base64(nonce 12 bytes || AES-GCM ciphertext+tag). */
+export interface EncryptedEnvelope {
+  v: 1
+  enc: string
+}
+
+export type WirePayload = BroadcastPayload | EncryptedEnvelope
+
+/** Desktop asks the user to confirm a new phone before accepting input. */
+export interface ApprovalRequiredPayload {
+  type: 'approval_required'
+  eventId: string
+  sessionId: string
+  clientId: string
+  timestamp: string
+}
+
+/** Desktop's verdict after the user accepts or rejects a pairing request. */
+export interface PairingResultPayload {
+  type: 'pairing_result'
+  eventId: string
+  sessionId: string
+  clientId: string
+  approved: boolean
   timestamp: string
 }
 
@@ -92,6 +123,8 @@ export interface PresencePayload {
   eventId: string
   sessionId: string
   clientId: string
+  /** Per-tab identity so one closed tab cannot unlink another live tab. */
+  tabId?: string
   timestamp: string
 }
 

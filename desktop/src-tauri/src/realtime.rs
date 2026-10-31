@@ -5,6 +5,8 @@ use tokio::sync::mpsc;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 use tokio_tungstenite::tungstenite::Message;
 
+use crate::crypto::{self, Key};
+
 pub enum RealtimeCommand {
     Send(Value),
     /// Send a final broadcast, give the server a moment to fan it out, close
@@ -22,6 +24,7 @@ pub enum RealtimeCommand {
 pub fn spawn_realtime(
     ws_url: String,
     channel: String,
+    session_id: String,
     access_token: String,
     out_tx: mpsc::Sender<Value>,
     cmd_rx: mpsc::Receiver<RealtimeCommand>,
@@ -29,9 +32,22 @@ pub fn spawn_realtime(
     tauri::async_runtime::spawn(async move {
         let mut cmd_rx = cmd_rx;
         let mut retry = 1u64;
+        let key = crypto::derive_key(&session_id);
+        // Flipped once a peer proves it speaks the encrypted envelope. The
+        // flag is per connection: a fresh socket starts in plaintext so an
+        // older phone build can still talk to us.
+        let mut peer_encrypted = false;
         loop {
-            let clean = run_connection(&ws_url, &channel, &access_token, out_tx.clone(), &mut cmd_rx)
-                .await;
+            let clean = run_connection(
+                &ws_url,
+                &channel,
+                &access_token,
+                &key,
+                &mut peer_encrypted,
+                out_tx.clone(),
+                &mut cmd_rx,
+            )
+            .await;
             if clean {
                 eprintln!("[realtime] connection ended cleanly");
                 break;
@@ -64,9 +80,12 @@ async fn run_connection(
     ws_url: &str,
     channel: &str,
     access_token: &str,
+    key: &Key,
+    peer_encrypted: &mut bool,
     out_tx: mpsc::Sender<Value>,
     cmd_rx: &mut mpsc::Receiver<RealtimeCommand>,
 ) -> bool {
+    *peer_encrypted = false;
     let request = match ws_url.to_string().into_client_request() {
         Ok(r) => r,
         Err(e) => {
@@ -125,7 +144,7 @@ async fn run_connection(
                             Ok(v) => v,
                             Err(_) => continue,
                         };
-                        match handle_message(parsed, channel, out_tx.clone()).await {
+                        match handle_message(parsed, channel, key, peer_encrypted, out_tx.clone()).await {
                             Some(reply) => {
                                 if sink.send(Message::Text(reply.to_string().into())).await.is_err() {
                                     return false;
@@ -150,13 +169,17 @@ async fn run_connection(
             cmd = cmd_rx.recv() => {
                 match cmd {
                     Some(RealtimeCommand::Send(payload)) => {
+                        let Some(wire) = wire_payload(key, *peer_encrypted, &payload) else {
+                            eprintln!("[realtime] failed to encrypt outbound payload");
+                            continue;
+                        };
                         let msg = json!({
                             "topic": channel,
                             "event": "broadcast",
                             "payload": {
                                 "type": "broadcast",
                                 "event": "airtype",
-                                "payload": payload
+                                "payload": wire
                             },
                             "ref": null
                         });
@@ -165,13 +188,17 @@ async fn run_connection(
                         }
                     }
                     Some(RealtimeCommand::SendAndStop { payload, ack }) => {
+                        let Some(wire) = wire_payload(key, *peer_encrypted, &payload) else {
+                            let _ = ack.send(());
+                            return true;
+                        };
                         let msg = json!({
                             "topic": channel,
                             "event": "broadcast",
                             "payload": {
                                 "type": "broadcast",
                                 "event": "airtype",
-                                "payload": payload
+                                "payload": wire
                             },
                             "ref": null
                         });
@@ -202,10 +229,21 @@ async fn run_connection(
     }
 }
 
+/// Encrypt outbound payloads once the peer proved it can decrypt them.
+fn wire_payload(key: &Key, encrypt: bool, payload: &Value) -> Option<Value> {
+    if encrypt {
+        crypto::encrypt_value(key, payload)
+    } else {
+        Some(payload.clone())
+    }
+}
+
 /// Process one inbound JSON message. Returns an optional reply to send back.
 async fn handle_message(
     parsed: Value,
     channel: &str,
+    key: &Key,
+    peer_encrypted: &mut bool,
     out_tx: mpsc::Sender<Value>,
 ) -> Option<Value> {
     let event = parsed.get("event").and_then(Value::as_str).unwrap_or("");
@@ -227,10 +265,21 @@ async fn handle_message(
             }
             None
         }
-        // Incoming broadcast: forward inner payload to the app.
+        // Incoming broadcast: forward inner payload to the app, decrypting the
+        // envelope when the phone speaks E2E.
         "broadcast" => {
             if let Some(inner) = parsed.pointer("/payload/payload") {
-                let _ = out_tx.try_send(inner.clone());
+                if crypto::is_envelope(inner) {
+                    match crypto::decrypt_value(key, inner) {
+                        Some(plain) => {
+                            *peer_encrypted = true;
+                            let _ = out_tx.try_send(plain);
+                        }
+                        None => eprintln!("[realtime] dropping undecryptable payload"),
+                    }
+                } else {
+                    let _ = out_tx.try_send(inner.clone());
+                }
             }
             None
         }

@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   useSettings,
   type CursorSensitivity,
@@ -13,7 +13,7 @@ interface SettingsPanelProps {
   onClose: () => void
   sessionId: string
   connectionStatus: ConnectionStatus
-  desktopStatus: 'waiting_pairing' | 'connected' | 'paused' | null
+  desktopStatus: 'waiting_pairing' | 'waiting_approval' | 'connected' | 'paused' | null
   paused: boolean
   deviceName?: string
   lastSeenAt?: number | null
@@ -126,6 +126,51 @@ export default function SettingsPanel({
 }: SettingsPanelProps) {
   const { settings, update } = useSettings()
   const [copied, setCopied] = useState(false)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  // Escape closes the sheet, and Tab stays inside it while it is modal.
+  useEffect(() => {
+    const panel = panelRef.current
+    const previous = document.activeElement as HTMLElement | null
+    const focusable = () =>
+      Array.from(
+        panel?.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        ) ?? [],
+      ).filter((el) => !el.hasAttribute('disabled'))
+
+    focusable()[0]?.focus()
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onCloseRef.current()
+        return
+      }
+      if (event.key !== 'Tab') return
+      const items = focusable()
+      if (items.length === 0) return
+      const first = items[0]
+      const last = items[items.length - 1]
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault()
+        last.focus()
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault()
+        first.focus()
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      previous?.focus()
+    }
+  }, [])
 
   const statusText = paused
     ? 'Dijeda'
@@ -148,6 +193,7 @@ export default function SettingsPanel({
   return (
     <div className="settings-backdrop" onClick={onClose}>
       <div
+        ref={panelRef}
         className="settings-panel"
         role="dialog"
         aria-modal="true"

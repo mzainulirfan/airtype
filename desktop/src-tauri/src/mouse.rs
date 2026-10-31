@@ -3,13 +3,19 @@ use std::sync::Mutex;
 
 pub struct MouseSimulator {
     /// (enigo, last applied relative dx, last applied relative dy)
-    inner: Mutex<(Enigo, i32, i32)>,
+    inner: Mutex<(Option<Enigo>, i32, i32)>,
 }
 
 impl MouseSimulator {
     pub fn new() -> Self {
-        let enigo = Enigo::new(&Settings::default()).expect("failed to init Enigo");
-        MouseSimulator { inner: Mutex::new((enigo, 0, 0)) }
+        let driver = match Enigo::new(&Settings::default()) {
+            Ok(enigo) => Some(enigo),
+            Err(e) => {
+                eprintln!("[airtype] input mouse tidak tersedia: {e}");
+                None
+            }
+        };
+        MouseSimulator { inner: Mutex::new((driver, 0, 0)) }
     }
 
     /// Move the cursor relative to its current position. `Coordinate::Rel` on
@@ -21,7 +27,10 @@ impl MouseSimulator {
             return Ok(());
         }
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        let (enigo, prev_dx, prev_dy) = &mut *inner;
+        let (driver, prev_dx, prev_dy) = &mut *inner;
+        let enigo = driver
+            .as_mut()
+            .ok_or_else(|| "input driver tidak tersedia (Enigo)".to_string())?;
         // Add ~1/3 of the previous delta (capped) so sustained movement leads
         // just enough to feel immediate, without running away on direction
         // changes.
@@ -37,8 +46,11 @@ impl MouseSimulator {
 
     pub fn button(&self, button: Button, direction: Direction) -> Result<(), String> {
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        inner
+        let enigo = inner
             .0
+            .as_mut()
+            .ok_or_else(|| "input driver tidak tersedia (Enigo)".to_string())?;
+        enigo
             .button(button, direction)
             .map_err(|e| format!("mouse button failed: {e}"))
     }
@@ -50,8 +62,11 @@ impl MouseSimulator {
             return Ok(());
         }
         let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
-        inner
+        let enigo = inner
             .0
+            .as_mut()
+            .ok_or_else(|| "input driver tidak tersedia (Enigo)".to_string())?;
+        enigo
             .scroll(delta, axis)
             .map_err(|e| format!("mouse scroll failed: {e}"))
     }

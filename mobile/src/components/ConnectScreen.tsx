@@ -5,13 +5,12 @@ import { isSupabaseConfigured } from '../lib/supabase'
 const QrScanner = lazy(() => import('./QrScanner'))
 
 interface ConnectScreenProps {
-  initialSession?: string
   notice?: string | null
   onConnect: (sessionId: string) => void
 }
 
-export default function ConnectScreen({ initialSession, notice, onConnect }: ConnectScreenProps) {
-  const [sessionId, setSessionId] = useState(initialSession ?? '')
+export default function ConnectScreen({ notice, onConnect }: ConnectScreenProps) {
+  const [sessionId, setSessionId] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [scanning, setScanning] = useState(false)
   const configured = isSupabaseConfigured()

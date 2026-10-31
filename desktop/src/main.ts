@@ -6,6 +6,7 @@ import type {
   Bridge,
   ClientInfo,
   HistoryItem,
+  PendingClient,
   SessionInfo,
   Stats,
   Status,
@@ -17,6 +18,7 @@ const STATUS_LABEL: Record<Status, string> = {
   creating_session: 'Membuat sesi…',
   subscribing: 'Menghubungkan…',
   waiting_pairing: 'Menunggu HP',
+  waiting_approval: 'Menunggu persetujuan',
   connected: 'Terhubung',
   paused: 'Dijeda',
   reconnecting: 'Menyambung ulang…',
@@ -78,6 +80,10 @@ const els = {
   errorText: $('error-text'),
   errorDismiss: $('error-dismiss'),
   pairingView: $('pairing-view'),
+  pairingRequest: $('pairing-request'),
+  pairingRequestId: $('pairing-request-id'),
+  pairingApprove: $('pairing-approve'),
+  pairingDeny: $('pairing-deny'),
   connectedView: $('connected-view'),
   connectedHero: $('connected-hero'),
   qrCode: $('qr-code'),
@@ -105,6 +111,8 @@ const els = {
   disconnect: $('disconnect'),
   history: $('history'),
   activityCount: $('activity-count'),
+  clearHistory: $('clear-history'),
+  autoPause: $<HTMLSelectElement>('auto-pause'),
   toast: $('toast'),
 }
 
@@ -112,6 +120,7 @@ let bridge: Bridge
 let status: Status = 'idle'
 let session: SessionInfo | null = null
 let client: ClientInfo | null = null
+let pending: PendingClient | null = null
 let stats: Stats = emptyStats()
 let history: HistoryItem[] = []
 let hostname = ''
@@ -121,6 +130,8 @@ let toastTimer: number | undefined
 let disconnectTimer: number | undefined
 let pausedTotalMs = 0
 let pausedSince: number | null = null
+
+const AUTO_PAUSE_KEY = 'airtype_auto_pause_ms'
 
 type ThemeMode = 'light' | 'dark' | 'system'
 
@@ -277,6 +288,30 @@ function renderStats() {
   els.statMouse.textContent = numberFormat.format(stats.mouseEvents)
 }
 
+function renderPending() {
+  els.pairingRequest.classList.toggle('hidden', !pending)
+  if (pending) {
+    els.pairingRequestId.textContent = pending.clientId
+    els.pairingRequestId.title = pending.clientId
+  }
+  els.pairingApprove.disabled = !pending
+  els.pairingDeny.disabled = !pending
+}
+
+async function resolvePairing(approve: boolean) {
+  if (!pending) return
+  const target = pending.clientId
+  els.pairingApprove.disabled = true
+  els.pairingDeny.disabled = true
+  try {
+    await bridge.invoke('resolve_pairing', { approve, clientId: target })
+  } catch (err) {
+    showError(`Gagal memproses permintaan pairing: ${String(err)}`)
+  } finally {
+    renderPending()
+  }
+}
+
 function renderClient() {
   els.connHost.textContent = hostname || '—'
 }
@@ -364,6 +399,7 @@ function emptyStateText(): string {
 function renderHistory() {
   const wasAtTop = els.history.scrollTop <= 12
   els.activityCount.textContent = `${history.length} entri`
+  els.clearHistory.hidden = history.length === 0
   els.activityCard.classList.toggle('is-empty', history.length === 0)
 
   if (history.length === 0) {
@@ -501,11 +537,13 @@ async function startNewSession() {
     const info = await bridge.invoke<SessionInfo>('new_session')
     session = info
     client = null
+    pending = null
     stats = emptyStats()
     history = []
     resetPauseClock()
     renderSession()
     renderClient()
+    renderPending()
     renderStats()
     renderHistory()
     renderConnectionMeta()
@@ -527,18 +565,43 @@ async function handleDisconnect() {
   disconnectTimer = window.setTimeout(resetDisconnect, 3000)
 }
 
+function renderAutoPause(ms: number) {
+  const value = String(ms)
+  if (ms > 0 && !Array.from(els.autoPause.options).some((opt) => opt.value === value)) {
+    const opt = document.createElement('option')
+    opt.value = value
+    opt.textContent = ms % 1000 === 0 ? `${ms / 1000} detik` : `${Math.round(ms / 1000)} detik`
+    els.autoPause.append(opt)
+  }
+  els.autoPause.value = value
+}
+
+function storedAutoPause(): number | null {
+  try {
+    const raw = localStorage.getItem(AUTO_PAUSE_KEY)
+    if (raw === null) return null
+    const ms = Number(raw)
+    return Number.isFinite(ms) && ms >= 0 ? ms : null
+  } catch {
+    return null
+  }
+}
+
 function applySnapshot(snapshot: UiSnapshot) {
   session = snapshot.session
   client = snapshot.client
+  pending = snapshot.pending ?? null
   stats = snapshot.stats ?? emptyStats()
   history = snapshot.history ?? []
   hostname = snapshot.hostname
   historyEnabled = snapshot.historyEnabled
 
   els.hostname.textContent = hostname || '—'
+  renderAutoPause(snapshot.autoPauseAfterMs ?? 0)
   resetPauseClock()
   renderSession()
   renderClient()
+  renderPending()
   renderStats()
   renderHistory()
 
@@ -578,6 +641,10 @@ async function init() {
     renderClient()
     renderView()
   })
+  await bridge.listen<PendingClient | null>('airtype:pending', (event) => {
+    pending = event.payload
+    renderPending()
+  })
   await bridge.listen<Stats>('airtype:stats', (event) => {
     stats = event.payload
     renderStats()
@@ -590,6 +657,24 @@ async function init() {
     })
   })
   els.newSession.addEventListener('click', () => void startNewSession())
+  els.clearHistory.addEventListener('click', () => {
+    void bridge.invoke('clear_history').catch((err) => {
+      showError(`Gagal membersihkan riwayat: ${String(err)}`)
+    })
+  })
+  els.autoPause.addEventListener('change', () => {
+    const ms = Number(els.autoPause.value) || 0
+    try {
+      localStorage.setItem(AUTO_PAUSE_KEY, String(ms))
+    } catch {
+      /* storage unavailable */
+    }
+    void bridge.invoke('set_auto_pause', { timeoutMs: ms }).catch((err) => {
+      showError(`Gagal mengubah jeda otomatis: ${String(err)}`)
+    })
+  })
+  els.pairingApprove.addEventListener('click', () => void resolvePairing(true))
+  els.pairingDeny.addEventListener('click', () => void resolvePairing(false))
   els.disconnect.addEventListener('click', () => void handleDisconnect())
   els.errorDismiss.addEventListener('click', hideError)
   els.copyCode.addEventListener('click', () =>
@@ -619,6 +704,15 @@ async function init() {
   try {
     const snapshot = await bridge.invoke<UiSnapshot>('get_ui_snapshot')
     applySnapshot(snapshot)
+
+    // A choice made in the helper UI wins over the env default on next launch.
+    const override = storedAutoPause()
+    if (override !== null) {
+      renderAutoPause(override)
+      void bridge.invoke('set_auto_pause', { timeoutMs: override }).catch((err) => {
+        showError(`Gagal menerapkan jeda otomatis: ${String(err)}`)
+      })
+    }
   } catch (err) {
     showError(String(err))
   }

@@ -244,6 +244,7 @@ html[data-theme-mode='system'] .theme-toggle .icon-auto {
 .status.subscribing,
 .status.reconnecting,
 .status.creating_session,
+.status.waiting_approval,
 .status.paused {
   color: var(--warning-text);
   background: var(--warning-bg);
@@ -378,6 +379,65 @@ h2 {
   min-width: 0;
 }
 
+.pairing-request {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid var(--warning-border);
+  background: var(--warning-bg);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  animation: fade-in 0.18s ease;
+}
+
+.pairing-request.hidden {
+  display: none;
+}
+
+.pairing-request .eyebrow {
+  color: var(--warning-text);
+}
+
+.pairing-request h3 {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  color: var(--warning-text);
+}
+
+.pairing-request .muted {
+  color: var(--text-dim);
+}
+
+.request-id {
+  display: inline-block;
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--warning-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.request-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
+}
+
+.request-actions .btn {
+  padding: 8px 16px;
+}
+
+.request-actions .btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .qr-stage {
   display: flex;
   flex-direction: column;
@@ -494,6 +554,23 @@ html[data-theme='dark'] .qr-wrap {
   white-space: normal;
   overflow-wrap: anywhere;
   line-height: 1.45;
+}
+
+.setting-row .setting-select {
+  margin-left: auto;
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--card-soft);
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  padding: 7px 10px;
+  cursor: pointer;
+}
+
+.setting-row .setting-select:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 2px;
 }
 
 .icon-btn {
@@ -848,6 +925,35 @@ html[data-theme='dark'] .qr-wrap {
   justify-content: space-between;
   gap: 10px;
   flex: none;
+}
+
+.activity-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.clear-history-btn {
+  padding: 4px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 10px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.clear-history-btn:hover {
+  color: var(--danger-text);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.clear-history-btn[hidden] {
+  display: none;
 }
 
 .activity-head h2 {

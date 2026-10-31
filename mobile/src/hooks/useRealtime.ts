@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { getChannelName } from '../lib/supabase'
-import type { BroadcastPayload, ConnectionStatus } from '../types'
+import { decryptEnvelope, encryptPayload, isEncryptedEnvelope } from '../lib/crypto'
+import type { BroadcastPayload, ConnectionStatus, EncryptedEnvelope } from '../types'
 
 export interface RealtimeOptions {
   sessionId: string
@@ -20,6 +21,34 @@ const HIDDEN_RESUBSCRIBE_MS = 15000
 // The desktop broadcasts desktop_status every ~10s, so this is several missed
 // broadcasts of slack.
 const DESKTOP_STALE_AFTER_MS = 40000
+// No desktop signal at all for this long means the pairing is dead (session
+// rotated, desktop crashed or uninstalled): stop reconnecting forever and let
+// the user pair again.
+const DESKTOP_EXPIRED_AFTER_MS = 90000
+
+const TAB_STORAGE_KEY = 'airtype_tab_id'
+
+function loadTabId(): string {
+  try {
+    const stored = sessionStorage.getItem(TAB_STORAGE_KEY)
+    if (stored) return stored
+  } catch {
+    /* storage unavailable */
+  }
+  const random =
+    typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID().replace(/-/g, '')
+      : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+  const id = `tab-${random.slice(0, 12)}`
+  try {
+    sessionStorage.setItem(TAB_STORAGE_KEY, id)
+  } catch {
+    /* storage unavailable */
+  }
+  return id
+}
+
+const TAB_ID = loadTabId()
 
 let presenceCounter = 0
 
@@ -33,10 +62,12 @@ export function useRealtime(
   sessionId: string | null,
   clientId: string,
   onMessage: (event: BroadcastPayload) => void,
+  onExpired?: () => void,
 ) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected')
   const statusRef = useRef<ConnectionStatus>('disconnected')
   const onMessageRef = useRef(onMessage)
+  const onExpiredRef = useRef(onExpired)
   const channelRef = useRef<ReturnType<SupabaseClient['channel']> | null>(null)
   const presenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const stuckSinceRef = useRef(0)
@@ -44,8 +75,15 @@ export function useRealtime(
   const hiddenSinceRef = useRef(0)
   const lastDesktopAtRef = useRef(0)
   const reconnectRef = useRef<() => void>(() => {})
+  const sendRef = useRef<(payload: BroadcastPayload) => void>(() => {})
+  // Set once the desktop advertises E2E support. Old desktops never do, so
+  // the phone keeps sending plaintext to stay compatible with them.
+  const secureRef = useRef(false)
+  const sendQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const inboundQueueRef = useRef<Promise<void>>(Promise.resolve())
 
   onMessageRef.current = onMessage
+  onExpiredRef.current = onExpired
 
   const setBoth = useCallback((next: ConnectionStatus) => {
     statusRef.current = next
@@ -60,6 +98,11 @@ export function useRealtime(
 
     const channelName = getChannelName(sessionId)
     activeRef.current = channelName
+    secureRef.current = false
+    // Start the dead-pairing clock now, otherwise a stale stored session would
+    // reconnect forever without ever expiring.
+    lastDesktopAtRef.current = Date.now()
+    let expired = false
     setBoth('connecting')
 
     const presence = (type: 'client_joined' | 'client_left' | 'client_heartbeat') => ({
@@ -67,31 +110,78 @@ export function useRealtime(
       eventId: nextPresenceId(clientId),
       sessionId,
       clientId,
+      tabId: TAB_ID,
       timestamp: new Date().toISOString(),
     })
 
-    // The channel's send() throws synchronously when the channel is not
-    // joined yet (it can happen briefly during reconnects). Never let that
-    // escape into event handlers or the heartbeat timer.
-    const safeSend = (payload: BroadcastPayload) => {
+    // Outbound sends are serialized so encryption never reorders messages
+    // (keystrokes must reach the desktop in the order they were typed).
+    // Encryption is opportunistic: until the desktop advertises E2E we send
+    // plaintext so older desktop builds keep working.
+    const queueSend = (payload: BroadcastPayload) => {
       const ch = channelRef.current
       if (!ch) return
-      try {
-        ch.send({ type: 'broadcast', event: 'airtype', payload }).catch(() => {})
-      } catch {
-        /* channel not joined — ignore */
+      sendQueueRef.current = sendQueueRef.current.then(async () => {
+        let wire: BroadcastPayload | EncryptedEnvelope = payload
+        if (secureRef.current) {
+          try {
+            wire = await encryptPayload(sessionId, payload)
+          } catch {
+            // crypto.subtle is unavailable outside secure contexts; falling
+            // back to plaintext keeps the remote usable instead of dead.
+            wire = payload
+          }
+        }
+        try {
+          await ch.send({ type: 'broadcast', event: 'airtype', payload: wire })
+        } catch {
+          /* channel closed — nothing to do */
+        }
+      })
+    }
+    sendRef.current = queueSend
+
+    const dispatch = (payload: BroadcastPayload) => {
+      // The desktop broadcasts its status periodically; treat any inbound
+      // desktop_status as proof the link is still alive end-to-end.
+      if (payload.type === 'desktop_status') {
+        if (payload.e2e === 1) secureRef.current = true
+        lastDesktopAtRef.current = Date.now()
       }
+      onMessageRef.current(payload)
+    }
+
+    const queueInbound = (payload: unknown) => {
+      inboundQueueRef.current = inboundQueueRef.current.then(async () => {
+        if (isEncryptedEnvelope(payload)) {
+          const decrypted = await decryptEnvelope(sessionId, payload)
+          if (!decrypted) return
+          secureRef.current = true
+          dispatch(decrypted)
+          return
+        }
+        if (payload && typeof payload === 'object') {
+          dispatch(payload as BroadcastPayload)
+        }
+      })
+    }
+
+    const joinNow = () => {
+      queueSend(presence('client_joined'))
+    }
+    const heartbeatNow = () => {
+      queueSend(presence('client_heartbeat'))
     }
 
     const subscribeCb = (state: string) => {
       if (activeRef.current !== channelName) return
       if (state === 'SUBSCRIBED') {
         setBoth('connected')
-        safeSend(presence('client_joined'))
+        joinNow()
         if (presenceTimerRef.current) clearInterval(presenceTimerRef.current)
         presenceTimerRef.current = setInterval(() => {
           if (activeRef.current !== channelName) return
-          safeSend(presence('client_heartbeat'))
+          heartbeatNow()
         }, PRESENCE_HEARTBEAT_MS)
       } else {
         setBoth('reconnecting')
@@ -104,11 +194,7 @@ export function useRealtime(
           config: { broadcast: { self: false } },
         })
         .on('broadcast', { event: 'airtype' }, ({ payload }) => {
-          const p = payload as BroadcastPayload
-          // The desktop broadcasts its status periodically; treat any inbound
-          // desktop_status as proof the link is still alive end-to-end.
-          if (p.type === 'desktop_status') lastDesktopAtRef.current = Date.now()
-          onMessageRef.current(p)
+          queueInbound(payload)
         })
         .subscribe(subscribeCb)
       channelRef.current = channel
@@ -119,8 +205,16 @@ export function useRealtime(
         clearInterval(presenceTimerRef.current)
         presenceTimerRef.current = null
       }
-      if (sendLeft) {
-        safeSend(presence('client_left'))
+      if (sendLeft && channelRef.current) {
+        // Presence carries no content, so it goes out immediately and in the
+        // clear; the async send queue would lose the race with removeChannel.
+        try {
+          channelRef.current
+            .send({ type: 'broadcast', event: 'airtype', payload: presence('client_left') })
+            .catch(() => {})
+        } catch {
+          /* channel not joined — ignore */
+        }
       }
       if (channelRef.current) {
         client.removeChannel(channelRef.current)
@@ -142,7 +236,7 @@ export function useRealtime(
         hardReconnect()
         return
       }
-      safeSend(presence('client_joined'))
+      joinNow()
     }
 
     // Returning to the foreground: re-handshake with the desktop right away
@@ -194,6 +288,14 @@ export function useRealtime(
         }
         return
       }
+      // The pairing is dead, not merely slow: return to the pairing screen
+      // instead of reconnecting forever to a session nobody is serving.
+      if (!expired && Date.now() - lastDesktopAtRef.current > DESKTOP_EXPIRED_AFTER_MS) {
+        expired = true
+        setBoth('disconnected')
+        onExpiredRef.current?.()
+        return
+      }
       if (stuckSinceRef.current === 0) {
         stuckSinceRef.current = Date.now()
       } else if (Date.now() - stuckSinceRef.current > STUCK_AFTER_MS) {
@@ -207,6 +309,7 @@ export function useRealtime(
     return () => {
       activeRef.current = null
       reconnectRef.current = () => {}
+      sendRef.current = () => {}
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('online', onOnline)
       window.removeEventListener('offline', onOffline)
@@ -215,28 +318,11 @@ export function useRealtime(
     }
   }, [client, sessionId, clientId, setBoth])
 
-  const send = useCallback(
-    (payload: BroadcastPayload) => {
-      if (!client || !sessionId || !channelRef.current) return false
-      const markReconnecting = () => setBoth('reconnecting')
-      try {
-        channelRef.current
-          .send({
-            type: 'broadcast',
-            event: 'airtype',
-            payload,
-          })
-          .then((res) => {
-            if (res === 'error' || res === 'timed out') markReconnecting()
-          })
-          .catch(markReconnecting)
-      } catch {
-        markReconnecting()
-      }
-      return true
-    },
-    [client, sessionId, setBoth],
-  )
+  const send = useCallback((payload: BroadcastPayload) => {
+    if (!client || !sessionId || !channelRef.current) return false
+    sendRef.current(payload)
+    return true
+  }, [client, sessionId])
 
   const reconnect = useCallback(() => {
     reconnectRef.current()

@@ -66,6 +66,7 @@ export function createDemoBridge(mode: string): Bridge {
     presence: 'waiting_pairing',
     paused: false,
     client: null,
+    pending: null,
     stats: emptyStats(),
     history: [],
     hostname: HOSTNAME,
@@ -73,7 +74,16 @@ export function createDemoBridge(mode: string): Bridge {
     historyEnabled: true,
   }
 
-  if (mode === 'connected' || mode === 'paused') {
+  if (mode === 'approval') {
+    state = {
+      ...state,
+      presence: 'waiting_approval',
+      pending: {
+        clientId: 'mobile-9f2c1a7b4d3e5061',
+        requestedAtMs: Date.now() - 4200,
+      },
+    }
+  } else if (mode === 'connected' || mode === 'paused') {
     state = {
       ...state,
       presence: mode === 'paused' ? 'paused' : 'connected',
@@ -122,17 +132,46 @@ export function createDemoBridge(mode: string): Bridge {
       }
     },
 
-    async invoke<T>(command: string): Promise<T> {
+    async invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
       switch (command) {
         case 'init_app':
           return undefined as T
         case 'get_ui_snapshot':
           return structuredClone(state) as T
+        case 'clear_history':
+          state.history = []
+          emit('airtype:history', state.history)
+          return undefined as T
+        case 'resolve_pairing': {
+          const pending = state.pending
+          if (!pending) return undefined as T
+          const approve = args?.approve === true
+          state.pending = null
+          emit('airtype:pending', null)
+          if (approve) {
+            state.client = {
+              clientId: pending.clientId,
+              connectedAtMs: Date.now(),
+              approximate: false,
+            }
+            state.presence = 'connected'
+            emit('airtype:client', state.client)
+            emit('airtype:status', 'connected')
+          } else {
+            state.presence = 'waiting_pairing'
+            emit('airtype:status', 'waiting_pairing')
+          }
+          return undefined as T
+        }
         case 'toggle_pause': {
           state.paused = !state.paused
           state.presence = state.paused ? 'paused' : 'connected'
           emit('airtype:status', state.presence)
           return state.paused as T
+        }
+        case 'set_auto_pause': {
+          state.autoPauseAfterMs = Number(args?.timeoutMs) || 0
+          return undefined as T
         }
         case 'new_session': {
           const id = Array.from(
