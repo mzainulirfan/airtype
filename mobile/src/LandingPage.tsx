@@ -11,11 +11,12 @@ import {
 import './landing.css'
 
 const APP_URL = '/connect'
-const DOWNLOAD_URL = 'https://github.com/mzainulirfan/airtype/releases'
+const DOWNLOAD_URL =
+  'https://github.com/mzainulirfan/airtype/releases/download/v0.1.1/AirType.Helper_0.1.1_x64-setup.exe'
 const DEMO_TEXT = 'halo dari hp'
 const DEMO_MAX_CHARS = 24
 
-type IconName = 'kbd' | 'pad' | 'ges' | 'cmd' | 'eye' | 'shd' | 'chk' | 'arr'
+type IconName = 'kbd' | 'pad' | 'ges' | 'cmd' | 'eye' | 'shd' | 'chk' | 'arr' | 'dl'
 
 const ICONS: Record<IconName, ReactNode> = {
   kbd: (
@@ -46,6 +47,7 @@ const ICONS: Record<IconName, ReactNode> = {
   ),
   chk: <path d="M5 12l5 5 9-10" />,
   arr: <path d="M5 12h14M13 6l6 6-6 6" />,
+  dl: <path d="M12 3v11m0 0l-4-4m4 4l4-4M4 18v2h16v-2" />,
 }
 
 function Glyph({ name, size = 22 }: { name: IconName; size?: number }) {
@@ -477,6 +479,9 @@ export default function LandingPage() {
                 {item.label}
               </a>
             ))}
+            <a href={DOWNLOAD_URL} target="_blank" rel="noreferrer">
+              Unduh
+            </a>
             <a className="lp-btn lp-btn-pri" href={APP_URL}>
               Buka aplikasi
             </a>
@@ -500,6 +505,10 @@ export default function LandingPage() {
               <a className="lp-btn lp-btn-pri" href={APP_URL}>
                 Buka aplikasi
                 <Glyph name="arr" size={18} />
+              </a>
+              <a className="lp-btn" href={DOWNLOAD_URL} target="_blank" rel="noreferrer">
+                <Glyph name="dl" size={18} />
+                Unduh Desktop Helper
               </a>
               <a className="lp-btn" href="#cara">
                 Lihat cara kerja
@@ -734,7 +743,8 @@ export default function LandingPage() {
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Unduh Desktop Helper
+                  <Glyph name="dl" size={15} />
+                  Unduh untuk Windows
                 </a>
               </div>
             </div>
@@ -801,11 +811,17 @@ export default function LandingPage() {
 
         <div className="lp-band lp-rv">
           <h2>Siap mengetik dari HP?</h2>
-          <p>Jalankan Desktop Helper, pindai QR, dan mulai dalam hitungan detik.</p>
-          <a className="lp-btn" href={APP_URL}>
-            Buka aplikasi
-            <Glyph name="arr" size={18} />
-          </a>
+          <p>Unduh Desktop Helper untuk Windows, jalankan, lalu pindai QR dari HP.</p>
+          <div className="lp-band-cta">
+            <a className="lp-btn" href={DOWNLOAD_URL} target="_blank" rel="noreferrer">
+              <Glyph name="dl" size={18} />
+              Unduh Desktop Helper
+            </a>
+            <a className="lp-btn lp-btn-ghost" href={APP_URL}>
+              Buka aplikasi
+              <Glyph name="arr" size={18} />
+            </a>
+          </div>
         </div>
 
         <footer className="lp-footer">
@@ -822,6 +838,9 @@ export default function LandingPage() {
             <a href="#fitur">Fitur</a>
             <a href="#cara">Cara kerja</a>
             <a href="#faq">FAQ</a>
+            <a href={DOWNLOAD_URL} target="_blank" rel="noreferrer">
+              Unduh
+            </a>
             <a href={APP_URL}>Buka aplikasi</a>
           </nav>
         </footer>

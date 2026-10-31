@@ -1153,6 +1153,19 @@ html[data-theme='dark'] .lp-bg i:nth-child(2) {
   color: var(--lp-p2);
 }
 
+.lp-band-cta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.lp-band .lp-btn.lp-btn-ghost {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
+  color: var(--accent-ink);
+}
+
 html[data-theme='dark'] .lp-band .lp-btn {
   color: var(--accent);
 }
