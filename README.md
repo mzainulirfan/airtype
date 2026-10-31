@@ -94,6 +94,7 @@ project; `mobile/vercel.json` adds SPA rewrites and security headers.
 | `AIRTYPE_AUTO_PAUSE_AFTER_MS` | desktop | Idle auto-pause default (0 disables); also editable in the helper UI |
 | `AIRTYPE_HISTORY_ENABLED` | desktop | Keep the local activity feed |
 | `AIRTYPE_HISTORY_LIMIT` | desktop | Maximum activity entries |
+| `AIRTYPE_SIGN_THUMBPRINT` | build | Override the code-signing certificate thumbprint |
 
 ## Tests and CI
 
@@ -104,8 +105,12 @@ project; `mobile/vercel.json` adds SPA rewrites and security headers.
 
 ## Release notes
 
-- Installers are currently unsigned; code signing certificates must be provided
-  before public distribution.
+- Windows installers are Authenticode-signed with a self-signed `CN=AirType`
+  certificate (see `desktop/src-tauri/scripts/sign-windows.ps1`). The certificate
+  is trusted only on the build machine, so other PCs show SmartScreen warnings
+  until they import the public `airtype-codesign.cer` (attached to each GitHub
+  release) into Trusted Root Certification Authorities. Replace it with a paid
+  CA certificate for public distribution.
 - The Tauri updater is not configured. Enabling it requires a signing keypair
   and a release host.
 - No license has been declared for this repository yet; pick one before
